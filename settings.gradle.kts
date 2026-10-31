@@ -18,4 +18,4 @@ rootProject.name = "cuentas-claras"
 
 // :core  -> lógica financiera pura (Kotlin/JVM), sin Android: cálculos deterministas y pruebas.
 // :app   -> aplicación Android (Fase 2).
-include(":core")
+include(":core", ":app")
