@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Pruebas del motor financiero
+        run: ./gradlew :core:test --no-daemon
+      - name: Informe de pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-pruebas
+          path: core/build/reports/tests/
+# Fase 2 añade aquí: ./gradlew :app:assembleRelease, firma con secretos del repositorio
+# y publicación del APK como GitHub Release (lo que usará el aviso de actualizaciones).
