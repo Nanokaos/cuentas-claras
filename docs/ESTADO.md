@@ -65,6 +65,8 @@ y un asistente con personalidad fría y sarcástica que explica y propone pero n
 
 ## Registro
 
+- 2026-10-31. Vera habla en voz alta (voz del sistema, tono robótico), dictado con mensajes de error claros, chat con Groq que responde sobre tus finanzas y maneja la app mediante herramientas (registrar, editar, borrar, confirmar previstos, límites, categorías, planificación, cuentas, búsqueda, navegación); todo cambio requiere confirmación. Sin clave: órdenes sencillas locales. Categorías propias. Intermediario opcional en `proxy/worker.js`. Corregido desbordamiento horizontal en móvil.
+
 - 2026-10-31. **Cambio a app web (PWA)** en `web/`, publicada gratis con GitHub Pages. Motor portado a JavaScript (`web/core.js`) con los mismos casos de prueba. Datos en el propio dispositivo (localStorage) con copia de seguridad JSON y exportación CSV. Dictado con el reconocimiento de voz del navegador. Vera: esfera de metal gastado en 3D (Three.js). La app Android queda aparcada como referencia.
 
 - 2026-10-31. Fase 2: APK compilado en GitHub Actions y publicado como versión 0.2.2. Vera 3D (Three.js empaquetado, sin red) dentro de la app. Firma estable para instalar versiones nuevas encima sin perder datos.
