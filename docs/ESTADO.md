@@ -42,7 +42,7 @@ y un asistente con personalidad fría y sarcástica que explica y propone pero n
 | Fase | Contenido | Estado |
 |---|---|---|
 | 1 | Motor financiero puro: dinero, cuentas, movimientos, traspasos, devoluciones, ajustes, repartos, recurrentes, cuotas, presupuesto con reservas, permisos, sincronización (HLC), duplicados, intérprete local | **Implementado y probado (46 pruebas)** |
-| 2 | App Android base: Room, cuentas, movimientos (CRUD, búsqueda, filtros), categorías, recurrentes, presupuestos, objetivos, Inicio con módulos ordenables, datos de demostración separados. APK de depuración por CI | Pendiente |
+| 2 | App Android base: Room, cuentas, movimientos (alta, edición, borrado, búsqueda, filtros, confirmar previstos), categorías y límites, recurrentes, entrada rápida por texto y dictado con confirmación, Inicio con Vera 3D y presupuesto explicado, ajustes, datos de demostración en archivo aparte | **Compila en CI (APK 0.2.2). Sin probar aún en un móvil real.** Pendiente: objetivos (pantalla), ordenar módulos de Inicio |
 | 3 | Usuarios y pareja: Firebase Auth, invitación, permisos de lectura/edición, revocación, Firestore + reglas, sincronización sin conexión y conflictos | Pendiente |
 | 4 | Asistente: capa de proveedores (Groq → Gemini opcional → modo local), presupuesto de uso, contexto mínimo autorizado, borradores con confirmación, protección frente a instrucciones dentro de los datos | Pendiente |
 | 5 | Voz y mascota: dictado, conversación interrumpible, TTS robótico, animación por estados (reposo, escucha, procesamiento, respuesta, aviso) y opción de reducir movimiento | Pendiente |
@@ -64,5 +64,7 @@ y un asistente con personalidad fría y sarcástica que explica y propone pero n
 - Pendiente de decidir en la fase 3: cuentas conjuntas, con saldo atribuido por porcentaje.
 
 ## Registro
+
+- 2026-10-31. Fase 2: APK compilado en GitHub Actions y publicado como versión 0.2.2. Vera 3D (Three.js empaquetado, sin red) dentro de la app. Firma estable para instalar versiones nuevas encima sin perder datos.
 
 - 2026-10-31. Fase 1 completada: `:core` compilado y 46 pruebas ejecutadas en local (Kotlin 2.0.21 + JUnit 4.13.2). CI de GitHub preparado y **aún sin ejecutar**.
