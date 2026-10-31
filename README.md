@@ -1,5 +1,7 @@
 # Cuentas Claras
 
+**App web:** https://nanokaos.github.io/cuentas-claras/ (ábrela en el móvil y usa «Añadir a pantalla de inicio»).
+
 Finanzas personales y de pareja para Android. Coste: 0 €. Estado y decisiones: [docs/ESTADO.md](docs/ESTADO.md).
 
 ## Estructura

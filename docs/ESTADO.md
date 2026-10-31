@@ -65,6 +65,8 @@ y un asistente con personalidad fría y sarcástica que explica y propone pero n
 
 ## Registro
 
+- 2026-10-31. **Cambio a app web (PWA)** en `web/`, publicada gratis con GitHub Pages. Motor portado a JavaScript (`web/core.js`) con los mismos casos de prueba. Datos en el propio dispositivo (localStorage) con copia de seguridad JSON y exportación CSV. Dictado con el reconocimiento de voz del navegador. Vera: esfera de metal gastado en 3D (Three.js). La app Android queda aparcada como referencia.
+
 - 2026-10-31. Fase 2: APK compilado en GitHub Actions y publicado como versión 0.2.2. Vera 3D (Three.js empaquetado, sin red) dentro de la app. Firma estable para instalar versiones nuevas encima sin perder datos.
 
 - 2026-10-31. Fase 1 completada: `:core` compilado y 46 pruebas ejecutadas en local (Kotlin 2.0.21 + JUnit 4.13.2). CI de GitHub preparado y **aún sin ejecutar**.
