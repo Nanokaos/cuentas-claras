@@ -265,7 +265,7 @@ function settings() {
     <label class="btn file">Importar extracto del banco (PDF, Excel o CSV)<input type="file" class="bankFile" accept=".pdf,.xlsx,.xls,.ods,.csv,application/pdf"></label>
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Cuentas Claras · versión web · coste 0 €.</p>`;
+  <p class="muted small">Cuentas Claras · versión 2026.11.01b · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -450,7 +450,11 @@ function csv() {
 // ======================= Arranque =======================
 db = load(); materializeAll(); save(); render();
 setInterval(() => { const before = S?.now?.slice(0, 10); compute(); if (S.now.slice(0, 10) !== before) { materializeAll(); save(); render(); } }, 60000);
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("./sw.js").catch(() => {});
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
+  // Cuando llega una versión nueva, se recarga una vez para usarla.
+  let reloaded = false; navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } });
+}
 
 
 // ======================= Hablar (burbuja + voz + historial) =======================
