@@ -153,7 +153,7 @@ export async function chat({ key, proxy, models, messages, tools }) {
     try {
       res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(proxy ? {} : { Authorization: `Bearer ${key}` }) },
+        headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
         body: JSON.stringify({ model, messages, ...(tools?.length ? { tools, tool_choice: "auto" } : {}), temperature: .4, max_tokens: 900 }),
       });
     } catch (e) {

@@ -20,7 +20,7 @@ const DEFAULT_CATS = [
   { id: "salud", name: "Salud" }, { id: "ropa", name: "Ropa" }, { id: "otros", name: "Otros" },
   { id: "ing-nomina", name: "Nómina", income: true }, { id: "ing-extra", name: "Ingresos extra", income: true },
 ];
-const DEFAULT_SETTINGS = { nextPayday: null, buffer: 0, monthlySavings: 0, sarcasm: 2, reduceMotion: false, quality: "alta", remarks: true, voice: true, groqKey: "", proxy: "", aiModel: "" };
+const DEFAULT_SETTINGS = { nextPayday: null, buffer: 0, monthlySavings: 0, sarcasm: 2, reduceMotion: false, quality: "alta", remarks: true, voice: true, groqKey: "", proxy: "", aiModel: "", fishKey: "", fishVoice: "", robot: 25 };
 const key = (demo) => (demo ? "cc.demo.v1" : "cc.v1");
 let demo = localStorage.getItem("cc.mode") !== "real";
 let db;
@@ -283,6 +283,13 @@ function settings() {
     <label class="sw"><span>Comentarios espontáneos</span><input type="checkbox" id="sRem" ${s.remarks ? "checked" : ""}></label>
     <label class="sw"><span>Reducir movimiento</span><input type="checkbox" id="sRm" ${s.reduceMotion ? "checked" : ""}></label>
     <label class="sw"><span>Ahorro de batería (3D sencillo)</span><input type="checkbox" id="sLow" ${s.quality === "baja" ? "checked" : ""}></label></section>
+  <section class="card form"><h3>Voz de Vera</h3>
+    <p class="muted small">Con una voz clonada en fish.audio, Vera habla con ella. Si falla o se acaba lo gratuito, usa la voz del móvil sin que tengas que hacer nada. La clave se guarda solo en este dispositivo.</p>
+    <label>Clave de API de Fish Audio<input id="sFishKey" type="password" autocomplete="off" value="${esc(s.fishKey || "")}" placeholder="Pégala aquí"></label>
+    <label>Identificador de la voz<input id="sFishVoice" autocomplete="off" value="${esc(s.fishVoice || "")}" placeholder="Ej.: 8a3f… o el enlace de la voz"><small class="muted">En fish.audio, abre tu voz: es el código largo de la dirección (…/m/<b>este-código</b>). Puedes pegar el enlace entero.</small></label>
+    <label>Efecto robótico: <b id="robotLbl">${s.robot ?? 25}%</b><input type="range" min="0" max="100" step="5" id="sRobot" value="${s.robot ?? 25}"></label>
+    <p class="small ${Voice.fishState.ok === false ? "w" : "muted"}" id="fishState">${fishStatus()}</p>
+    <div class="actions"><button class="btn" data-act="save-voice">Guardar y probar</button></div></section>
   <section class="card form"><h3>Inteligencia artificial</h3>
     <p class="muted small">Para conversar y que Vera maneje la app con frases libres, crea gratis una clave en console.groq.com (API Keys) y pégala aquí. Se guarda solo en este dispositivo. Cada uno debe usar su propia cuenta.</p>
     <label>Clave de Groq<input id="sKey" type="password" autocomplete="off" value="${esc(s.groqKey)}" placeholder="gsk_…"></label>
@@ -304,7 +311,7 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.01i · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.01j · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -445,12 +452,13 @@ document.addEventListener("click", (e) => {
   if ("account" in el.dataset) return accountSheet(el.dataset.account);
   if (el.dataset.act === "two-accounts") return twoAccountsSheet();
   if (el.dataset.act === "reset") return resetSheet();
+  if (el.dataset.act === "save-voice") return saveVoice();
   if (el.dataset.act === "tutorial") return startTutorial();
   if (el.dataset.act === "daily-test") return dailyTest();
   if (el.dataset.act === "daily-code") return dailyCode();
   if (el.dataset.act === "bizums") return bizumSheet();
   if ("savePlan" in el.dataset) { const b = C.parseMoney($("#sBuf").value || "0"), s = C.parseMoney($("#sSav").value || "0"); if (b == null || s == null) return toast("Revisa los importes."); applyPlan({ nextPayday: $("#sPay").value || null, buffer: b, monthlySavings: s }); return; }
-  if ("saveAi" in el.dataset) { db.settings.groqKey = $("#sKey").value.trim(); db.settings.proxy = $("#sProxy").value.trim(); db.settings.aiModel = $("#sModel").value.trim(); save(); render(); return talk(db.settings.groqKey || db.settings.proxy ? Lines.aiOn() : "Sin clave sigo entendiendo gastos e ingresos y órdenes sencillas. Para conversar de verdad necesito tu clave gratuita de Groq.", Lines.mood()); }
+  if ("saveAi" in el.dataset) { db.settings.groqKey = $("#sKey").value.trim(); db.settings.proxy = $("#sProxy").value.trim(); db.settings.aiModel = $("#sModel").value.trim(); save(); voiceCfg(); render(); return talk(db.settings.groqKey || db.settings.proxy ? Lines.aiOn() : "Sin clave sigo entendiendo gastos e ingresos y órdenes sencillas. Para conversar de verdad necesito tu clave gratuita de Groq.", Lines.mood()); }
   if ("clearChat" in el.dataset) { db.chat = []; save(); return toast("Historial de conversación borrado."); }
   if ("cat" in el.dataset) return categorySheet(el.dataset.cat);
   if ("export" in el.dataset) return download(`cuentas-claras-${C.dateOf(C.nowLocal())}.json`, JSON.stringify(db, null, 2), "application/json");
@@ -465,6 +473,7 @@ document.addEventListener("input", (e) => {
 document.addEventListener("change", (e) => {
   const id = e.target.id;
   if (id === "sRem") { db.settings.remarks = e.target.checked; save(); configVera(); }
+  if (id === "sRobot") { db.settings.robot = +e.target.value; $("#robotLbl").textContent = e.target.value + "%"; voiceCfg(); save(); return; }
   if (id === "sDaily") return void enableDaily(e.target.checked);
   if (id === "sVoice") { db.settings.voice = e.target.checked; save(); if (!e.target.checked) Voice.stopVoice(); }
   if (id === "sRm") { db.settings.reduceMotion = e.target.checked; save(); configVera(); }
@@ -697,6 +706,25 @@ function notifyCatchup() {
   navigator.serviceWorker.ready.then((r) => setTimeout(() => r.active?.postMessage({ type: "daily-catchup" }), 5000));
 }
 
+// ——— Voz clonada ———
+function voiceCfg() { const s = db.settings; Voice.configure({ fishKey: s.fishKey || "", fishVoice: s.fishVoice || "", proxy: s.proxy || "", robot: s.robot ?? 25 }); }
+function fishStatus() {
+  const s = db.settings; if (!s.fishKey || !s.fishVoice) return "Sin configurar: Vera usa la voz del móvil.";
+  if (Voice.fishState.ok === false) return "Problema: " + Voice.fishState.error + " Mientras, uso la voz del móvil.";
+  return Voice.fishState.ok ? "Funcionando con tu voz clonada." : "Configurada. Pulsa «Guardar y probar».";
+}
+async function saveVoice() {
+  let id = $("#sFishVoice").value.trim(); const m = id.match(/\/m\/([A-Za-z0-9_-]+)/) || id.match(/([0-9a-f]{32})/i); if (m) id = m[1];
+  Object.assign(db.settings, { fishKey: $("#sFishKey").value.trim(), fishVoice: id, robot: +$("#sRobot").value }); save(); voiceCfg();
+  if (!db.settings.fishKey || !db.settings.fishVoice) { render(); return toast("Pon la clave y el identificador de la voz."); }
+  Voice.unlockVoice(); $("#fishState").textContent = "Probando…"; $("#fishState").className = "small muted";
+  const line = pickL("Voz configurada. A partir de ahora hablo así.", "Voz configurada. ¿Mejor así?", "Voz nueva. Sigo pensando lo mismo de tus gastos, pero ahora suena mejor.", "Nueva voz, mismo desprecio por tus finanzas.", "Ahora tengo voz propia, sujeto de pruebas. Úsala para escuchar lo mal que gastas.");
+  vera((v) => v.speak(line, "sarcastica", "habla"));
+  const err = await Voice.testFish(line);
+  if (err) { $("#fishState").textContent = "Problema: " + err; $("#fishState").className = "small w"; toast(err); }
+  else { $("#fishState").textContent = "Funcionando con tu voz clonada."; $("#fishState").className = "small muted"; }
+}
+
 function hideIntro() { const el = $("#intro"); if (!el || el.classList.contains("off")) return; const wait = Math.max(0, 1400 - performance.now()); setTimeout(() => { el.classList.add("off"); setTimeout(() => el.remove(), 1000); }, wait); }
 setTimeout(hideIntro, 8000);
 
@@ -763,7 +791,7 @@ function fixCashWithdrawals() {
 }
 
 // ======================= Arranque =======================
-db = load(); materializeAll(); save(); render();
+db = load(); materializeAll(); save(); voiceCfg(); render();
 setInterval(() => { const before = S?.now?.slice(0, 10); compute(); if (S.now.slice(0, 10) !== before) { materializeAll(); save(); render(); } }, 60000);
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("./sw.js", { type: "module", updateViaCache: "none" }).then((r) => { r.update(); notifyCatchup(); }).catch(() => {});

@@ -149,7 +149,7 @@ const PERSONA = ["neutra y profesional", "con ironía suave", "fría, sarcástic
 
 async function aiLine(db, f, level, avoid) {
   const s = db.settings || {}; if (!s.groqKey && !s.proxy) return null;
-  const url = s.proxy ? s.proxy.replace(/\/$/, "") + "/openai/v1/chat/completions" : "https://api.groq.com/openai/v1/chat/completions";
+  const url = s.proxy ? s.proxy.replace(/\/$/, "") + "/chat" : "https://api.groq.com/openai/v1/chat/completions";
   const datos = { hoy_puedes_gastar: M(Math.max(0, f.today)), al_dia: M(f.daily), hasta_el_cobro: M(f.available), dias_para_cobrar: f.days, deficit: f.deficit ? M(f.deficit) : null,
     ayer_gastado: M(f.yesterday), mayor_gasto_ayer: f.yBig ? `${f.yBig.concept} ${M(f.yBig.amount)}` : null, presupuestos_superados: f.over.map((o) => `${o.name} +${M(o.by)}`),
     categoria_mas_gasto_mes: f.topCat ? `${f.topCat} ${M(f.topAmt)}` : null, ahorro: f.hasSavings ? M(f.savings) : null,
