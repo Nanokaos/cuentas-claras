@@ -287,6 +287,7 @@ function settings() {
     <p class="muted small">Con una voz clonada en fish.audio, Vera habla con ella. Si falla o se acaba lo gratuito, usa la voz del móvil sin que tengas que hacer nada. La clave se guarda solo en este dispositivo.</p>
     <label>Clave de API de Fish Audio<input id="sFishKey" type="password" autocomplete="off" value="${esc(s.fishKey || "")}" placeholder="Pégala aquí"></label>
     <label>Identificador de la voz<input id="sFishVoice" autocomplete="off" value="${esc(s.fishVoice || "")}" placeholder="Ej.: 8a3f… o el enlace de la voz"><small class="muted">En fish.audio, abre tu voz: es el código largo de la dirección (…/m/<b>este-código</b>). Puedes pegar el enlace entero.</small></label>
+    <label>Intermediario (Cloudflare)<input id="sProxyV" autocomplete="off" inputmode="url" value="${esc(s.proxy || "")}" placeholder="https://veranza.tu-usuario.workers.dev"><small class="muted">Necesario para Fish Audio en el navegador. Es el mismo que el de la IA.</small></label>
     <label>Efecto robótico: <b id="robotLbl">${s.robot ?? 25}%</b><input type="range" min="0" max="100" step="5" id="sRobot" value="${s.robot ?? 25}"></label>
     <p class="small ${Voice.fishState.ok === false ? "w" : "muted"}" id="fishState">${fishStatus()}</p>
     <div class="actions"><button class="btn" data-act="save-voice">Guardar y probar</button></div></section>
@@ -311,7 +312,7 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.01j · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.01k · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -715,7 +716,7 @@ function fishStatus() {
 }
 async function saveVoice() {
   let id = $("#sFishVoice").value.trim(); const m = id.match(/\/m\/([A-Za-z0-9_-]+)/) || id.match(/([0-9a-f]{32})/i); if (m) id = m[1];
-  Object.assign(db.settings, { fishKey: $("#sFishKey").value.trim(), fishVoice: id, robot: +$("#sRobot").value }); save(); voiceCfg();
+  Object.assign(db.settings, { fishKey: $("#sFishKey").value.trim(), fishVoice: id, robot: +$("#sRobot").value, proxy: $("#sProxyV").value.trim().replace(/\/$/, "") }); save(); voiceCfg();
   if (!db.settings.fishKey || !db.settings.fishVoice) { render(); return toast("Pon la clave y el identificador de la voz."); }
   Voice.unlockVoice(); $("#fishState").textContent = "Probando…"; $("#fishState").className = "small muted";
   const line = pickL("Voz configurada. A partir de ahora hablo así.", "Voz configurada. ¿Mejor así?", "Voz nueva. Sigo pensando lo mismo de tus gastos, pero ahora suena mejor.", "Nueva voz, mismo desprecio por tus finanzas.", "Ahora tengo voz propia, sujeto de pruebas. Úsala para escuchar lo mal que gastas.");

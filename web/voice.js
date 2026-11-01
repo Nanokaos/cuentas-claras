@@ -52,7 +52,7 @@ async function fishAudio(text, signal) {
       body: JSON.stringify({ text, reference_id: cfg.fishVoice, format: "mp3", mp3_bitrate: 64, latency: "balanced", normalize: true, language: "es" }) });
   } catch (err) {
     if (err.name === "AbortError") throw err;
-    throw Object.assign(new Error(cfg.proxy ? "No puedo contactar con el intermediario." : "El navegador ha bloqueado la conexión directa con Fish Audio. Hace falta el intermediario gratuito (Ajustes › Voz)."), { soft: true });
+    throw Object.assign(new Error(cfg.proxy ? "No puedo contactar con el intermediario. Revisa la dirección y que el worker esté desplegado." : "El navegador ha bloqueado la conexión directa con Fish Audio. Hace falta el intermediario gratuito de Cloudflare: pon su dirección en «Intermediario»."), { soft: true });
   }
   if (!r.ok) {
     let msg = ""; try { msg = (await r.json()).message || ""; } catch {}
