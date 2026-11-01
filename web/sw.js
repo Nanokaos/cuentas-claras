@@ -1,5 +1,5 @@
 // Funciona sin conexión: guarda la app y las librerías 3D tras la primera visita.
-const CACHE = "cc-v5";
+const CACHE = "cc-v6";
 const CORE = ["./", "./index.html", "./app.js", "./core.js", "./voice.js", "./ai.js", "./importer.js", "./vera.html", "./manifest.webmanifest", "./icon.svg"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

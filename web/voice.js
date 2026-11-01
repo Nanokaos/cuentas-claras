@@ -29,7 +29,10 @@ export function say(text, { rate = 1.02, pitch = .62, onState } = {}) {
   if (!synth || !text) return Promise.resolve();
   synth.cancel();
   // Lee los importes como se dicen: «12,50 €» → «12,50 euros».
-  const clean = text.replace(/ /g, " ").replace(/€/g, " euros").replace(/«|»/g, "");
+  // Nada de leer símbolos: asteriscos, almohadillas, barras, guiones bajos, comillas, emojis...
+  const clean = text.replace(/\u00A0/g, " ").replace(/€/g, " euros").replace(/%/g, " por ciento")
+    .replace(/https?:\/\/\S+/g, "").replace(/[*#_`~|<>\[\]{}\\^=+«»"“”]/g, " ")
+    .replace(/\s\/\s/g, " ").replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").replace(/\s{2,}/g, " ").trim();
   return new Promise((resolve) => {
     const u = new SpeechSynthesisUtterance(clean);
     const v = pickVoice(); if (v) u.voice = v;

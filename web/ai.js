@@ -1,7 +1,7 @@
 // Cerebro de Vera. La IA interpreta y propone; las cifras salen siempre del motor (core.js)
 // y cualquier cambio en los datos necesita tu confirmación.
 
-export const DEFAULT_MODELS = ["openai/gpt-oss-120b", "llama-3.3-70b-versatile"];
+export const DEFAULT_MODELS = ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "openai/gpt-oss-20b"];
 
 /** Herramientas que la IA puede pedir. Las que cambian datos se muestran para confirmar; las de consulta se ejecutan. */
 export const TOOLS = [
@@ -69,6 +69,28 @@ export const TOOLS = [
 function fn(name, description, properties, required) {
   return { type: "function", function: { name, description, parameters: { type: "object", properties, required } } };
 }
+/** Solo se envían las herramientas que la frase puede necesitar: menos tokens, sin pasar el cupo gratuito. */
+const ALWAYS = ["registrar_movimientos", "editar_movimiento", "eliminar_movimiento", "buscar_movimientos", "resumen_por_categoria", "ir_a", "deshacer"];
+const GROUPS = [
+  [/borra|elimina|quita|todos|todas|recategori|categor|pasa .* a |mueve|cambia/, ["eliminar_movimientos", "recategorizar_movimientos", "confirmar_previsto"]],
+  [/presupuest|limite|límite|tope|categor|concepto/, ["fijar_limite", "crear_categoria", "renombrar_categoria", "eliminar_categoria"]],
+  [/cuenta|saldo|efectivo|banco|tarjeta|ahorro/, ["crear_cuenta", "editar_cuenta", "ajustar_saldo_cuenta", "eliminar_cuenta"]],
+  [/cobro|nomina|nómina|colchon|colchón|ahorr|planific/, ["ajustar_planificacion"]],
+  [/cada (semana|mes|año)|recurrent|repet|plazos|cuota|mensual|recibo|suscrip|alquiler/, ["crear_recurrente", "detener_recurrente", "listar_recurrentes_y_objetivos", "confirmar_previsto"]],
+  [/objetivo|meta|ahorrar para|vacaciones|aporta/, ["crear_objetivo", "aportar_objetivo", "eliminar_objetivo", "listar_recurrentes_y_objetivos"]],
+  [/sarcasm|cruel|amable|voz|calla|habla|comentario|movimiento reducido|bateria|batería|demostraci|ajuste/, ["cambiar_ajustes"]],
+  [/import|extracto|pdf|excel|csv/, ["importar_extracto"]],
+  [/export|descarga|copia|csv|backup/, ["exportar_datos"]],
+  [/borra(r)? todo|empezar de cero|borra mis datos|resetea/, ["borrar_todo"]],
+  [/pagad|he pagado|confirma|ya cobr/, ["confirmar_previsto"]],
+];
+export function toolsFor(text) {
+  const t = text.toLowerCase(), names = new Set(ALWAYS);
+  for (const [re, list] of GROUPS) if (re.test(t)) list.forEach((n) => names.add(n));
+  return TOOLS.filter((x) => names.has(x.function.name));
+}
+export const approxTokens = (obj) => Math.ceil(JSON.stringify(obj).length / 3.2);
+
 export const READ_ONLY = new Set(["buscar_movimientos", "ir_a", "listar_recurrentes_y_objetivos", "resumen_por_categoria"]);
 
 const PERSONA = [
@@ -96,9 +118,9 @@ Reglas:
 /** Contexto mínimo y autorizado: lo justo para responder, no toda la base de datos. */
 export function buildContext({ S, db, C, M }) {
   const r = S.pay, cats = db.categories.filter((c) => !c.archived);
-  const recent = S.live.filter((t) => C.effectiveStatus(t, S.now) === "REALIZADO").sort((a, b) => (a.dateTime < b.dateTime ? 1 : -1)).slice(0, 12);
-  const upcoming = S.live.filter((t) => C.effectiveStatus(t, S.now) !== "REALIZADO").sort((a, b) => (a.dateTime < b.dateTime ? -1 : 1)).slice(0, 8);
-  const tx = (t) => ({ id: t.id, fecha: t.dateTime.replace("T", " "), tipo: t.kind, importe: M(t.amount), concepto: t.concept, categoria_id: t.categoryId, cuenta_id: t.accountId, estado: C.effectiveStatus(t, S.now) });
+  const recent = S.live.filter((t) => C.effectiveStatus(t, S.now) === "REALIZADO").sort((a, b) => (a.dateTime < b.dateTime ? 1 : -1)).slice(0, 8);
+  const upcoming = S.live.filter((t) => C.effectiveStatus(t, S.now) !== "REALIZADO").sort((a, b) => (a.dateTime < b.dateTime ? -1 : 1)).slice(0, 6);
+  const tx = (t) => [t.id, t.dateTime.replace("T", " "), t.kind, M(t.amount), t.concept, t.categoryId, t.accountId, C.effectiveStatus(t, S.now)].join("|");
   return JSON.stringify({
     ahora: S.now.replace("T", " "),
     disponible: { hoy: M(r.today), esta_semana: M(Math.max(0, r.thisWeek)), hasta: r.horizon.provisional ? "fin de mes (provisional, falta fecha de cobro)" : r.horizon.endDate, disponible_periodo: M(r.available), dias: r.horizon.days, al_dia: M(r.dailyRate), deficit: r.deficit ? M(r.deficit) : null, este_mes: M(S.month.available) },
@@ -108,8 +130,9 @@ export function buildContext({ S, db, C, M }) {
     avisos: r.warnings.map((w) => w.message),
     planificacion: { proximo_cobro: db.settings.nextPayday, colchon: M(db.settings.buffer), ahorro_mensual: M(db.settings.monthlySavings) },
     cuentas: db.accounts.filter((a) => !a.archived).map((a) => ({ id: a.id, nombre: a.name, tipo: a.type, saldo: M(S.bal[a.id] ?? 0), para_gastar: a.liquid })),
-    categorias: cats.map((c) => ({ id: c.id, nombre: c.name, padre_id: c.parentId ?? null, ingreso: !!c.income, limite: c.limit ? M(c.limit) : null })),
-    presupuestos_mes: r.categories.map((c) => ({ categoria_id: c.categoryId, gastado: M(c.spent), comprometido: M(c.committed), limite: M(c.limit), queda: M(c.remaining), al_dia: M(c.perDay), estado: c.state })),
+    categorias: cats.map((c) => [c.id, c.name, c.parentId ?? "", c.income ? "ingreso" : "", c.limit ? M(c.limit) : ""].filter((x, i) => i < 2 || x).join("|")),
+    presupuestos_mes: r.categories.map((c) => `${c.categoryId}: ${M(c.spent)} de ${M(c.limit)}, queda ${M(c.remaining)}, ${c.state}`),
+    formato_movimientos: "id|fecha|tipo|importe|concepto|categoria_id|cuenta_id|estado",
     ultimos_movimientos: recent.map(tx),
     proximos: upcoming.map(tx),
   });
@@ -125,19 +148,22 @@ export async function chat({ key, proxy, models, messages, tools }) {
       res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(proxy ? {} : { Authorization: `Bearer ${key}` }) },
-        body: JSON.stringify({ model, messages, tools, tool_choice: "auto", temperature: .4, max_tokens: 700 }),
+        body: JSON.stringify({ model, messages, ...(tools?.length ? { tools, tool_choice: "auto" } : {}), temperature: .4, max_tokens: 900 }),
       });
     } catch (e) {
       throw new AiError("network", proxy ? "No puedo contactar con tu intermediario. Revisa la dirección en Ajustes." : "El navegador ha bloqueado la conexión directa con Groq. Configura el intermediario gratuito (Ajustes → Inteligencia artificial) o revisa tu conexión.");
     }
     if (res.ok) { const j = await res.json(); return { message: j.choices?.[0]?.message ?? { content: "" }, model, usage: j.usage }; }
-    const body = await res.text().catch(() => "");
-    if (res.status === 401) throw new AiError("auth", "La clave de Groq no es válida. Revísala en Ajustes.");
-    if (res.status === 429) { lastErr = new AiError("limit", "He agotado el cupo gratuito de Groq por ahora. Sigo funcionando con órdenes sencillas; vuelve a intentarlo en un rato."); continue; }
-    if (res.status === 404 || res.status === 400 && /model/i.test(body)) { lastErr = new AiError("model", `El modelo ${model} no está disponible.`); continue; }
-    lastErr = new AiError("http", `Groq ha respondido con un error (${res.status}).`);
-    break;
+    let info = {}; try { info = (await res.json()).error || {}; } catch (_) {}
+    const msg = String(info.message || ""), code = String(info.code || info.type || "");
+    if (res.status === 401) throw new AiError("auth", "La clave de Groq no es válida o ha caducado. Revísala en Ajustes.");
+    if (res.status === 413 || /too large|tokens per minute|TPM|context.length|reduce the length/i.test(msg)) { lastErr = new AiError("size", "La petición era demasiado grande para el cupo gratuito.", msg); continue; }
+    if (res.status === 429) { lastErr = new AiError("limit", "He agotado el cupo gratuito de Groq por ahora. Sigo con órdenes sencillas; vuelve a intentarlo en un rato.", msg); continue; }
+    if (code === "tool_use_failed" || /tool/i.test(msg)) { lastErr = new AiError("tool", "El modelo se ha liado con las herramientas.", msg); continue; }
+    if (res.status === 404 || code === "model_not_found" || /model .*(not found|does not exist|decommissioned)/i.test(msg)) { lastErr = new AiError("model", `El modelo ${model} no está disponible.`, msg); continue; }
+    lastErr = new AiError("http", `Groq ha respondido con un error (${res.status})${msg ? ": " + msg.slice(0, 160) : ""}.`, msg);
+    continue;
   }
   throw lastErr;
 }
-export class AiError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
+export class AiError extends Error { constructor(code, msg, detail = "") { super(msg); this.code = code; this.detail = detail; } }
