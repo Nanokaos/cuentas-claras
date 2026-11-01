@@ -77,3 +77,9 @@ Ajustes → «Importar extracto» o Movimientos → «Importar extracto». Admit
 - «he pasado 900 de ahorro a gasto» · «pasa 50 de gasto a efectivo» → traspaso (no es ingreso ni gasto).
 - Al importar un extracto, la cuenta se reconoce por el IBAN (la primera vez se pregunta y se recuerda).
 - Los traspasos que ya dijiste se confirman con el extracto por importe y fecha (±3 días); los de dos extractos se unen en uno.
+
+## Veranza: tareas, micro y notificación diaria
+- Bizums sin nombre: tarjeta en Inicio para decir a quién fueron o de quién vinieron. También a Vera: «el bizum de 25 del 20 fue a Laura».
+- Micro: un toque abre, otro toque cierra. Mientras escucha, el botón se pone rojo y aparece la barra «Te escucho».
+- Ajustes › Notificaciones: frase diaria a las 10:00. «Código para la hora exacta» se pega en push/subs.json; hace falta el secreto VAPID_PRIVATE_KEY en GitHub.
+- Ajustes › Datos › «Poner todo a cero…»: borra movimientos y saldos (o todo) y se puede deshacer.

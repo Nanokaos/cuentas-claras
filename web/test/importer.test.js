@@ -111,3 +111,10 @@ test("un traspaso apuntado que el banco no muestra se quita", () => {
   const p = I.plan(d, stmt("MERCADONA 28/10/2026 -20.0 -20,00€"), "gasto", "yo", "2026-11-01T09:00");
   assert.equal(p.remove[0].id, "dicho"); assert.equal(p.warnings.length, 1);
 });
+test("al reimportar se conserva el nombre puesto a un bizum", () => {
+  const d = two(), txt = "BIZUM ENVIADO 20/10/2026 -25.0 -25,00€";
+  const p1 = I.plan(d, stmt(txt), "gasto", "yo", "2026-11-01T09:00"); d.transactions.push(...p1.add);
+  Object.assign(d.transactions[0], { who: "Laura", concept: "Bizum a Laura" });
+  const p2 = I.plan(d, stmt(txt), "gasto", "yo", "2026-11-01T09:00");
+  assert.equal(p2.add[0].who, "Laura"); assert.equal(p2.add[0].concept, "Bizum a Laura");
+});

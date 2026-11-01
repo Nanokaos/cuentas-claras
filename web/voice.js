@@ -70,7 +70,7 @@ export function listen(onPartial) {
     stopVoice();
     const rec = new SR();
     rec.lang = "es-ES"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
-    let finalText = "", partial = "", failed = null;
+    let finalText = "", partial = "", failed = null, aborted = false;
     rec.onresult = (e) => {
       partial = ""; finalText = "";
       for (const r of e.results) { if (r.isFinal) finalText += r[0].transcript; else partial += r[0].transcript; }
@@ -78,11 +78,15 @@ export function listen(onPartial) {
     };
     rec.onerror = (e) => { failed = ERRORS[e.error] ?? `El dictado ha fallado (${e.error}).`; };
     rec.onend = () => {
+      listen.active = false;
+      if (aborted) return resolve("");
       const text = (finalText || partial).trim();
       if (text) resolve(text);
       else if (failed) reject(new Error(failed)); else resolve("");
     };
-    try { rec.start(); } catch (err) { reject(new Error("No he podido arrancar el dictado: " + err.message)); }
+    try { rec.start(); listen.active = true; } catch (err) { listen.active = false; reject(new Error("No he podido arrancar el dictado: " + err.message)); }
     listen.stop = () => { try { rec.stop(); } catch (_) {} };
+    /** Cierra el micro y descarta lo oído. */
+    listen.abort = () => { aborted = true; try { rec.abort(); } catch (_) { resolve(""); } };
   });
 }

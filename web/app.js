@@ -1,8 +1,9 @@
-// Cuentas Claras (web). Todos los importes salen de core.js; aquí solo hay datos, pantallas y la voz de Vera.
+// Veranza (web). Todos los importes salen de core.js; aquí solo hay datos, pantallas y la voz de Vera.
 import * as C from "./core.js";
 import * as Voice from "./voice.js";
 import * as AI from "./ai.js";
 import * as Importer from "./importer.js";
+import * as Daily from "./daily.js";
 
 const ME = "yo";
 const $ = (s, r = document) => r.querySelector(s);
@@ -49,7 +50,10 @@ function load() {
   try { const raw = localStorage.getItem(key(demo)); if (raw) { const d = JSON.parse(raw); d.settings = { ...DEFAULT_SETTINGS, ...d.settings }; d.chat ??= []; return d; } } catch (e) { console.warn(e); }
   return demo ? seedDemo() : blank();
 }
-function save() { try { localStorage.setItem(key(demo), JSON.stringify(db)); } catch (e) { toast("No se pudo guardar en este dispositivo: " + e.message); } }
+function save() { try { localStorage.setItem(key(demo), JSON.stringify(db)); } catch (e) { toast("No se pudo guardar en este dispositivo: " + e.message); } mirror(); }
+/** Copia de tus datos reales para la notificación diaria (el service worker no puede leer localStorage). */
+let mirrorTimer = 0;
+function mirror() { if (demo) return; clearTimeout(mirrorTimer); mirrorTimer = setTimeout(() => { Daily.kvSet("db", JSON.parse(JSON.stringify(db))).catch(() => {}); }, 400); }
 function materializeAll() {
   const today = C.dateOf(C.nowLocal()), ids = new Set(db.transactions.map((t) => t.id));
   for (const r of db.recurrences.filter((r) => r.active !== false)) for (const t of C.materialize(r, r.start, C.addDays(today, 62), ids)) { db.transactions.push(t); ids.add(t.id); }
@@ -73,7 +77,7 @@ let veraReady = false; const queue = [];
 const vera = (fn) => { if (veraReady && frame.contentWindow?.vera) fn(frame.contentWindow.vera); else queue.push(fn); };
 addEventListener("message", (e) => {
   const m = e.data?.vera; if (!m) return;
-  if (m === "ready") { veraReady = true; configVera(); queue.splice(0).forEach((fn) => fn(frame.contentWindow.vera)); talk(Lines.hello(), Lines.mood(), "habla", { log: false }); }
+  if (m === "ready") { hideIntro(); veraReady = true; configVera(); queue.splice(0).forEach((fn) => fn(frame.contentWindow.vera)); talk(Lines.hello(), Lines.mood(), "habla", { log: false }); }
   if (m === "said") { if (db.settings.voice) Voice.say(e.data.text); return; }
   if (m === "poke") Voice.unlockVoice();
   if (m === "tap") { Voice.unlockVoice(); openChat(); }
@@ -174,11 +178,12 @@ function home() {
     <details><summary>De dónde sale</summary>${r.explanation.map((l) => `<div class="line ${l.kind}"><span>${{ RESTA: "− ", RESULTADO: "= " }[l.kind] || ""}${esc(l.text)}</span><span>${l.amount != null ? M(l.amount) : ""}</span></div>`).join("")}</details>
   </section>
   <div class="tiles">
-    <section class="card"><div class="label">Esta semana</div><div class="mid">${M(Math.max(0, r.thisWeek))}</div></section>
+    <section class="card"><div class="label">Esta semana</div><div class="mid ${r.thisWeek < 0 ? "neg" : ""}">${M(neg ? 0 : r.thisWeek)}</div><small class="muted">${weekNote(r)}</small></section>
     <section class="card"><div class="label">Este mes</div><div class="mid ${m.available < 0 ? "neg" : ""}">${M(m.available)}</div></section>
     <section class="card"><div class="label">Saldo total</div><div class="mid">${M(r.totalBalance)}</div></section>
     <section class="card"><div class="label">Reservado</div><div class="mid">${M(r.reserved.total)}</div></section>
   </div>
+  ${tasksCard()}
   ${r.warnings.length ? `<section class="card warn">${r.warnings.map((w) => `<p>${esc(w.message)}</p>`).join("")}</section>` : ""}
   ${catCard(r)}
   <section class="card"><h3>Próximos recibos e ingresos</h3>
@@ -189,6 +194,12 @@ function home() {
 function catSpent(catId, from, to) {
   const ids = C.subtree(catId, db.categories), byId = Object.fromEntries(db.transactions.map((t) => [t.id, t]));
   return S.live.filter((t) => t.status === "REALIZADO" && ids.has(C.categoryOf(t, byId)) && C.dateOf(t.dateTime) >= from && C.dateOf(t.dateTime) <= to).reduce((a, t) => a + C.spendingShare(t, ME, byId), 0);
+}
+/** Aclara qué abarca «Esta semana»: de hoy al domingo (o al día antes del cobro, si llega antes). */
+function weekNote(r) {
+  if (r.available < 0) return "Sin margen: hay déficit";
+  const today = C.dateOf(S.now), sun = C.addDays(today, 6 - C.dow(today)), last = C.addDays(today, r.horizon.days - 1), end = sun < last ? sun : last, n = C.daysBetween(today, end) + 1;
+  return n === 1 ? (end === sun ? "Hoy es domingo: solo queda hoy" : "Solo hoy: mañana cobras") : `Hoy y ${n - 1} día${n > 2 ? "s" : ""} más, hasta el ${C.fmtDay(end)}`;
 }
 function weekBounds(today) { const mon = C.addDays(today, -C.dow(today)); return [mon, C.addDays(mon, 6)]; }
 function catCard(r) {
@@ -205,7 +216,7 @@ function catCard(r) {
 let filter = "todos", query = "";
 function movements() {
   const list = S.live.filter((t) => filter === "todos" || (filter === "gastos" && t.kind === "GASTO") || (filter === "ingresos" && t.kind === "INGRESO") || (filter === "previstos" && C.effectiveStatus(t, S.now) !== "REALIZADO"))
-    .filter((t) => !query || C.normalize(`${t.concept} ${catName(t.categoryId)} ${t.notes || ""}`).includes(C.normalize(query)))
+    .filter((t) => !query || C.normalize(`${t.concept} ${catName(t.categoryId)} ${t.notes || ""} ${t.who || ""}`).includes(C.normalize(query)))
     .sort((a, b) => (a.dateTime < b.dateTime ? 1 : -1));
   let last = "", out = "";
   for (const t of list) {
@@ -261,6 +272,10 @@ function settings() {
       <label>Modelo<input id="sModel" value="${esc(s.aiModel)}" placeholder="${AI.DEFAULT_MODELS[0]}"></label></details>
     <p class="muted small">Qué se envía: un resumen de tus cifras, categorías, cuentas y los últimos movimientos, más lo que le escribas. Nada más.</p>
     <div class="actions"><button class="btn" data-save-ai>Guardar</button><button class="btn ghost" data-clear-chat>Borrar conversación</button></div></section>
+  <section class="card form"><h3>Notificaciones</h3>
+    <label class="sw"><span>Frase diaria de Vera a las 10:00<small>Cada día distinta y sobre tus cuentas. Se calcula en tu móvil; tus datos no salen de él${s.groqKey ? " (salvo el resumen que redacta la IA)" : ""}.</small></span><input type="checkbox" id="sDaily" ${s.daily ? "checked" : ""}></label>
+    <p class="muted small" id="dailyState">${notifyStatus()}</p>
+    <div class="actions"><button class="btn ghost" data-act="daily-test">Probar ahora</button><button class="btn ghost" data-act="daily-code">Código para la hora exacta</button></div></section>
   <section class="card form"><h3>Datos</h3>
     <label class="sw"><span>Modo demostración<small>Datos de ejemplo guardados aparte. Tus datos reales no se tocan.</small></span><input type="checkbox" id="sDemo" ${demo ? "checked" : ""}></label>
     <button class="btn ghost" data-export>Descargar copia de seguridad</button>
@@ -268,8 +283,9 @@ function settings() {
     <label class="btn ghost file">Restaurar copia…<input type="file" id="sImport" accept="application/json"></label>
     <label class="btn file">Importar extracto del banco (PDF, Excel o CSV)<input type="file" class="bankFile" accept=".pdf,.xlsx,.xls,.ods,.csv,application/pdf"></label>
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
+    <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Cuentas Claras · versión 2026.11.01f · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.01g · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -283,6 +299,7 @@ function editor(id) {
       <label>Concepto<input name="concept" value="${esc(d.concept)}"></label>
       <label id="lAcc">${d.kind === "TRASPASO" ? "Desde la cuenta" : "Cuenta"}<select name="accountId">${accOptions(d.accountId)}</select></label>
       <label id="lTo" ${d.kind === "TRASPASO" ? "" : "hidden"}>Hacia la cuenta<select name="toAccountId">${accOptions(d.toAccountId, d.accountId)}</select></label>
+      ${isBizum(d) ? `<label>${d.kind === "GASTO" ? "Enviado a" : "Recibido de"}<input name="who" list="peopleList2" value="${esc(d.who || "")}" placeholder="Nombre" autocomplete="off"><datalist id="peopleList2">${knownPeople().map((p) => `<option value="${esc(p)}">`).join("")}</datalist></label>` : ""}
       <label id="lCat" ${d.kind === "TRASPASO" ? "hidden" : ""}>Categoría<select name="categoryId"><option value="">Sin categoría</option>${catOptions(d.kind, d.categoryId)}</select></label>
       <div class="two"><label>Fecha<input type="date" name="date" value="${d.dateTime.slice(0, 10)}"></label><label>Hora<input type="time" name="time" value="${d.dateTime.slice(11, 16)}"></label></div>
       <p class="v small" id="eFuture" hidden>Fecha futura: se guarda como previsto y no se descuenta hasta que lo confirmes.</p>
@@ -301,6 +318,8 @@ function editor(id) {
         categoryId: kind === "TRASPASO" ? null : f.categoryId.value || null, notes: f.notes.value.trim(), status: future ? "PREVISTO" : "REALIZADO",
         planned: t ? (t.planned || future) : future, estimated: kind === "INGRESO" && future && f.estimated.checked };
     };
+    const build0 = build;
+    const buildWho = () => { const x = build0(); if (x && f.who) { const w = f.who.value.trim(); if (w && w !== d.who) { const keep = x.concept !== d.concept ? x.concept : null; setWho(x, w); if (keep) x.concept = keep; } else if (!w) delete x.who; } return x; };
     const refresh = () => {
       const x = build(), future = `${f.date.value}T${f.time.value}` > C.nowLocal();
       $("#eFuture", root).hidden = !future; $("#lEst", root).hidden = !(future && kind === "INGRESO");
@@ -316,7 +335,7 @@ function editor(id) {
     });
     f.addEventListener("input", refresh); refresh();
     f.addEventListener("submit", (e) => {
-      e.preventDefault(); const x = build();
+      e.preventDefault(); const x = buildWho();
       if (!x) return toast("Revisa el importe y la fecha.");
       if (x.kind === "TRASPASO" && (!x.toAccountId || x.toAccountId === x.accountId)) return toast("Elige dos cuentas distintas para el traspaso.");
       upsertTx(x);
@@ -368,16 +387,27 @@ function showDrafts() {
     $("#dDiscard", root).addEventListener("click", () => { drafts = []; closeSheet(); talk(Lines.discarded(), Lines.mood()); });
   });
 }
+let micBusy = false, micStarted = 0;
+function micUi(on) {
+  micBusy = on; document.body.classList.toggle("listening", on);
+  const b = $("#mic"); b.classList.toggle("live", on); b.setAttribute("aria-pressed", on); b.setAttribute("aria-label", on ? "Cerrar el micrófono" : "Hablar con Vera");
+  $("#listenBar").hidden = !on; if (on) $("#listenText").textContent = "Te escucho…";
+}
 async function dictate() {
-  Voice.unlockVoice();
-  $("#mic").classList.add("live"); vera((v) => { v.setState("escucha"); v.show("Escuchando…"); });
+  if (micBusy) { // segundo toque: cerrar el micro (se ignora un doble toque accidental)
+    if (performance.now() - micStarted < 450) return;
+    Voice.listen.abort?.(); micUi(false); vera((v) => { v.setState("reposo"); v.show("Micro cerrado."); setTimeout(() => v.hide(), 1500); }); return;
+  }
+  Voice.unlockVoice(); micStarted = performance.now(); micUi(true);
+  vera((v) => { v.setState("escucha"); v.show("Te escucho…"); });
   try {
-    const text = await Voice.listen((partial) => vera((v) => v.show("«" + partial + "…»")));
-    $("#mic").classList.remove("live");
+    const text = await Voice.listen((partial) => { $("#listenText").textContent = "«" + partial + "»"; vera((v) => v.show("«" + partial + "…»")); });
+    if (!micBusy) return; // se cerró a mano
+    micUi(false);
     if (!text) { vera((v) => { v.setState("reposo"); v.hide(); }); return; }
     ask(text);
   } catch (err) {
-    $("#mic").classList.remove("live"); vera((v) => v.setState("reposo"));
+    micUi(false); vera((v) => v.setState("reposo"));
     if (err.message) talk(err.message, "neutral");
   }
 }
@@ -394,6 +424,10 @@ document.addEventListener("click", (e) => {
   if (el.dataset.limit) return categorySheet(el.dataset.limit);
   if ("account" in el.dataset) return accountSheet(el.dataset.account);
   if (el.dataset.act === "two-accounts") return twoAccountsSheet();
+  if (el.dataset.act === "reset") return resetSheet();
+  if (el.dataset.act === "daily-test") return dailyTest();
+  if (el.dataset.act === "daily-code") return dailyCode();
+  if (el.dataset.act === "bizums") return bizumSheet();
   if ("savePlan" in el.dataset) { const b = C.parseMoney($("#sBuf").value || "0"), s = C.parseMoney($("#sSav").value || "0"); if (b == null || s == null) return toast("Revisa los importes."); applyPlan({ nextPayday: $("#sPay").value || null, buffer: b, monthlySavings: s }); return; }
   if ("saveAi" in el.dataset) { db.settings.groqKey = $("#sKey").value.trim(); db.settings.proxy = $("#sProxy").value.trim(); db.settings.aiModel = $("#sModel").value.trim(); save(); render(); return talk(db.settings.groqKey || db.settings.proxy ? Lines.aiOn() : "Sin clave sigo entendiendo gastos e ingresos y órdenes sencillas. Para conversar de verdad necesito tu clave gratuita de Groq.", Lines.mood()); }
   if ("clearChat" in el.dataset) { db.chat = []; save(); return toast("Historial de conversación borrado."); }
@@ -410,6 +444,7 @@ document.addEventListener("input", (e) => {
 document.addEventListener("change", (e) => {
   const id = e.target.id;
   if (id === "sRem") { db.settings.remarks = e.target.checked; save(); configVera(); }
+  if (id === "sDaily") return void enableDaily(e.target.checked);
   if (id === "sVoice") { db.settings.voice = e.target.checked; save(); if (!e.target.checked) Voice.stopVoice(); }
   if (id === "sRm") { db.settings.reduceMotion = e.target.checked; save(); configVera(); }
   if (id === "sLow") { db.settings.quality = e.target.checked ? "baja" : "alta"; save(); configVera(); }
@@ -421,6 +456,7 @@ if (db.chat.length) renderChatBadge(); toast(demo ? "Modo demostración." : "Aho
 addEventListener("hashchange", () => { tab = location.hash.replace("#", "") || "inicio"; render(); });
 $("#quickForm").addEventListener("submit", (e) => { e.preventDefault(); Voice.unlockVoice(); const v = $("#quickText").value.trim(); if (v) { $("#quickText").value = ""; ask(v); } });
 $("#mic").addEventListener("click", dictate);
+$("#listenBar").addEventListener("click", () => { if (micBusy) { micStarted = 0; dictate(); } });
 $("#chatBtn").addEventListener("click", () => { Voice.unlockVoice(); openChat(); });
 $("#chatClose").addEventListener("click", () => $("#chat").close());
 $("#chatForm").addEventListener("submit", (e) => { e.preventDefault(); Voice.unlockVoice(); const v = $("#chatText").value.trim(); if (v) { $("#chatText").value = ""; ask(v); } });
@@ -444,6 +480,116 @@ function monthFlow(id) {
   return r;
 }
 const effects = (t) => t.kind === "TRASPASO" ? [[t.accountId, -t.amount], [t.toAccountId, t.amount]] : t.kind === "GASTO" || t.kind === "LIQUIDACION" ? [[t.accountId, -t.amount]] : [[t.accountId, t.amount]];
+
+// ——— Tareas: bizums sin identificar ———
+const isBizum = (t) => !t.deleted && (t.kind === "GASTO" || t.kind === "INGRESO" || t.kind === "DEVOLUCION") && (["cat-bizum", "ing-bizum"].includes(t.categoryId) || /\bbizum\b/.test(C.normalize(t.concept || "")));
+const pendingBizums = () => S.live.filter((t) => isBizum(t) && !t.who && !t.whoUnknown && C.effectiveStatus(t, S.now) === "REALIZADO").sort((a, b) => (a.dateTime < b.dateTime ? 1 : -1));
+const knownPeople = () => [...new Set(db.transactions.filter((t) => t.who && !t.deleted).map((t) => t.who))].sort((a, b) => a.localeCompare(b, "es"));
+function setWho(t, name) {
+  const who = name.trim().replace(/\s+/g, " ").replace(/^./, (x) => x.toUpperCase()); if (!who) return t;
+  t.who = who; delete t.whoUnknown; if (isBizum(t)) t.concept = `Bizum ${t.kind === "GASTO" ? "a" : "de"} ${who}`; return t;
+}
+function tasksCard() {
+  const list = pendingBizums(); if (!list.length) return "";
+  const recent = list.filter((t) => C.daysBetween(C.dateOf(t.dateTime), C.dateOf(S.now)) <= 30).length;
+  return `<button class="card task" data-act="bizums"><span class="dot"></span><span class="grow"><b>${list.length === 1 ? "1 bizum sin identificar" : `${list.length} bizums sin identificar`}</b><small>${recent ? `${recent} de los últimos 30 días. ` : ""}Dime a quién fueron o de quién vinieron.</small></span><span class="chev">›</span></button>`;
+}
+function bizumSheet() {
+  const list = pendingBizums(), people = knownPeople(), shown = list.slice(0, 25);
+  if (!list.length) return talk("No queda ningún bizum por identificar.", "neutral");
+  openSheet(`<h3>Bizums sin identificar</h3>
+    <p class="muted small">El banco no dice el nombre. Escribe a quién fue o de quién vino: queda apuntado en el movimiento y Vera lo tendrá en cuenta. Déjalo vacío si no lo sabes.</p>
+    <datalist id="peopleList">${people.map((p) => `<option value="${esc(p)}">`).join("")}</datalist>
+    <form class="form" id="bzForm">${shown.map((t) => `<div class="bz"><div class="bz-h"><span>${t.kind === "GASTO" ? "Enviado" : "Recibido"} · ${C.fmtDayLong(C.dateOf(t.dateTime))}</span><b class="${t.kind === "GASTO" ? "" : "pos"}">${t.kind === "GASTO" ? "−" : "+"}${M(t.amount)}</b></div>
+      <div class="two"><input name="${t.id}" list="peopleList" placeholder="${t.kind === "GASTO" ? "¿A quién?" : "¿De quién?"}" autocomplete="off"><select name="c-${t.id}"><option value="">¿Para qué? (opcional)</option>${catOptions(t.kind === "GASTO" ? "GASTO" : "INGRESO", "")}</select></div></div>`).join("")}
+      ${list.length > shown.length ? `<p class="muted small">Y ${list.length - shown.length} más, de fechas anteriores. Aparecerán cuando termines estos.</p>` : ""}
+      <label class="sw"><span>Los que deje vacíos, marcarlos como «no lo sé»<small>Así dejan de salir como tarea.</small></span><input type="checkbox" name="skip"></label>
+      <div class="actions"><button class="btn">Guardar</button><button class="btn ghost" type="button" data-close>Más tarde</button></div></form>`, (root) => {
+    $("#bzForm", root).addEventListener("submit", (e) => {
+      e.preventDefault(); const f = e.target; let named = 0, skipped = 0;
+      snapshot("identificar bizums");
+      for (const t0 of shown) {
+        const t = db.transactions.find((x) => x.id === t0.id); if (!t) continue;
+        const name = f.elements[t.id].value, cat = f.elements["c-" + t.id].value;
+        if (name.trim()) { setWho(t, name); named++; } else if (f.skip.checked) { t.whoUnknown = true; skipped++; }
+        if (cat) t.categoryId = cat;
+      }
+      save(); closeSheet(); render();
+      const left = pendingBizums().length, more = left ? ` Quedan ${left}.` : "";
+      talk(named ? pickL(`Apuntados ${named} bizums.${more}`, `${named} bizums con nombre.${more || " No queda ninguno."}`,
+        `${named} bizums identificados. Ahora sé a quién le das el dinero.${more}`, `${named} bizums con nombre. Interesante lista de beneficiarios.${more}`,
+        `${named} bizums identificados. Ya sé a quién financias con tu desorden.${more}`) : skipped ? `Marcados ${skipped} como desconocidos.${more}` : "No has puesto ningún nombre.", Lines.mood());
+    });
+  });
+}
+
+/** Poner a cero: borra movimientos y saldos (para volver a cargar los extractos) o absolutamente todo. */
+function resetSheet() {
+  openSheet(`<h3>Poner todo a cero</h3>
+    <p>Útil si te has liado y quieres volver a cargar los extractos desde el principio. ${demo ? "Afecta solo a la demostración." : "Afecta a tus datos reales."}</p>
+    <form class="form" id="rForm">
+      <label class="radio"><input type="radio" name="mode" value="tx" checked><span><b>Borrar movimientos y saldos</b><small>Se quedan tus cuentas (con su IBAN), categorías, presupuestos y ajustes. Los saldos vuelven a 0 €.</small></span></label>
+      <label class="radio"><input type="radio" name="mode" value="all"><span><b>Borrar absolutamente todo</b><small>Cuentas, categorías, presupuestos, objetivos y conversación. Se conservan la voz, el sarcasmo y tu clave de IA.</small></span></label>
+      <label>Escribe CERO para confirmar<input name="ok" autocomplete="off" autocapitalize="characters"></label>
+      <p class="muted small">Podrás deshacerlo justo después desde «Deshacer último cambio».</p>
+      <div class="actions"><button class="btn danger">Poner a cero</button><button class="btn ghost" type="button" data-close>Cancelar</button></div></form>`, (root) => {
+    $("#rForm", root).addEventListener("submit", (e) => {
+      e.preventDefault(); const f = e.target;
+      if (f.ok.value.trim().toUpperCase() !== "CERO") return toast("Escribe CERO para confirmar.");
+      const all = f.mode.value === "all"; snapshot(all ? "borrar todo" : "borrar movimientos y saldos");
+      if (all) { const keep = { ...db.settings }; db = blank(); db.settings = keep; db.chat = []; }
+      else { db.transactions = []; db.contributions = []; db.accounts.forEach((a) => { a.opening = 0; }); (db.recurrences || []).forEach((r) => { r.materializedUntil = null; }); }
+      save(); closeSheet(); render();
+      talk(pickL("Hecho: todo a cero. Puedes volver a cargar los extractos.", "Borrón y cuenta nueva. Carga los extractos cuando quieras.", "Todo a cero. Ojalá tus gastos fueran tan fáciles de borrar.", "Cero. Como tu capacidad de ahorro. Sube los extractos.", "Todo borrado. Has destruido las pruebas, pero el banco las tiene. Súbelas."), Lines.mood());
+    });
+  });
+}
+// ——— Notificación diaria ———
+const VAPID_PUBLIC = "BE6gHAqKHgwMMoJO1QYMDJMvuPeuk2Fj0JgCSgkJzPdugQcwAxZ2_hGfyK-7KweGaNWBZkGz1t-8chWNTAQCYpw";
+const b64u = (s) => { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4)); return Uint8Array.from(b, (c) => c.charCodeAt(0)); };
+function notifyStatus() {
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) return "Este navegador no admite notificaciones. Instala Veranza en la pantalla de inicio desde Chrome (Android) o Safari (iPhone).";
+  if (Notification.permission === "denied") return "Las notificaciones están bloqueadas para Veranza en los ajustes del móvil.";
+  if (!db.settings.daily) return "Desactivada.";
+  return db.settings.pushSub ? "Activada. Si ya me has pasado el código, llega a las 10:00; si no, llega la primera vez que el móvil despierte a Veranza después de las 10:00." : "Activada.";
+}
+async function enableDaily(on) {
+  if (!on) { db.settings.daily = false; save(); render(); return; }
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) { toast("Este navegador no admite notificaciones."); render(); return; }
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") { db.settings.daily = false; save(); render(); return talk("Sin permiso no puedo avisarte. Actívalo en los ajustes del móvil para Veranza.", "neutral"); }
+  db.settings.daily = true; save(); await Daily.kvSet("db", JSON.parse(JSON.stringify(db))).catch(() => {});
+  const reg = await navigator.serviceWorker.ready;
+  try { const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) })); db.settings.pushSub = JSON.stringify(sub); } catch (err) { console.warn("push", err); }
+  try { if ("periodicSync" in reg) await reg.periodicSync.register("vera-diaria", { minInterval: 12 * 3600e3 }); } catch (err) { console.warn("periodicSync", err); }
+  save(); render();
+  talk(pickL("Activado. Te escribiré cada mañana.", "Hecho: una frase cada mañana a las diez.", "Activado. Cada mañana, a las diez, un recordatorio de tus decisiones.", "Activado. Mañana a las diez empiezo a juzgarte por escrito.", "Activado. Cada día a las diez te recordaré lo que has hecho con tu dinero. No podrás esconderte."), Lines.mood());
+}
+async function dailyTest() {
+  if (Notification?.permission !== "granted") return enableDaily(true);
+  if (demo) toast("Ojo: la notificación usa tus datos reales, no la demostración.");
+  await Daily.kvSet("db", JSON.parse(JSON.stringify(demo ? JSON.parse(localStorage.getItem(key(false)) || "null") || db : db))).catch(() => {});
+  (await navigator.serviceWorker.ready).active?.postMessage({ type: "daily-test" });
+}
+function dailyCode() {
+  const code = db.settings.pushSub;
+  if (!code) return talk("Primero activa la frase diaria en este móvil.", "neutral");
+  openSheet(`<h3>Código para la hora exacta</h3>
+    <p>Para que la notificación llegue puntual a las 10:00, un programa gratuito en GitHub da el aviso cada mañana. Copia este código y pégaselo a Claude en la conversación donde se creó Veranza.</p>
+    <textarea readonly rows="6" style="width:100%;font-size:11px">${esc(code)}</textarea>
+    <p class="muted small">Solo sirve para despertar a Veranza en este móvil. No contiene datos de tus cuentas.</p>
+    <div class="actions"><button class="btn" type="button" id="copyCode">Copiar</button><button class="btn ghost" type="button" data-close>Cerrar</button></div>`, (root) => {
+    $("#copyCode", root).addEventListener("click", () => navigator.clipboard.writeText(code).then(() => toast("Copiado."), () => toast("Mantén pulsado el texto para copiarlo.")));
+  });
+}
+/** Si a las 10:00 no llegó (sin código o con el móvil apagado), al abrir la app después se recupera. */
+function notifyCatchup() {
+  if (!db.settings.daily || demo || Notification?.permission !== "granted" || new Date().getHours() < 10) return;
+  navigator.serviceWorker.ready.then((r) => setTimeout(() => r.active?.postMessage({ type: "daily-catchup" }), 5000));
+}
+
+function hideIntro() { const el = $("#intro"); if (!el || el.classList.contains("off")) return; const wait = Math.max(0, 1400 - performance.now()); setTimeout(() => { el.classList.add("off"); setTimeout(() => el.remove(), 1000); }, wait); }
+setTimeout(hideIntro, 8000);
 
 /** Prepara las dos cuentas: nómina/ahorro (no para gastar) y gasto (para gastar). */
 function twoAccountsSheet() {
@@ -511,7 +657,7 @@ function fixCashWithdrawals() {
 db = load(); materializeAll(); save(); render();
 setInterval(() => { const before = S?.now?.slice(0, 10); compute(); if (S.now.slice(0, 10) !== before) { materializeAll(); save(); render(); } }, 60000);
 if ("serviceWorker" in navigator && location.protocol === "https:") {
-  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
+  navigator.serviceWorker.register("./sw.js", { type: "module", updateViaCache: "none" }).then((r) => { r.update(); notifyCatchup(); }).catch(() => {});
   // Cuando llega una versión nueva, se recarga una vez para usarla.
   let reloaded = false; navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloaded) { reloaded = true; location.reload(); } });
 }
@@ -617,7 +763,7 @@ function runQuery(name, a) {
     const tops = db.categories.filter((c) => !c.parentId && !c.income && !c.archived);
     return { desde: from, hasta: to, categorias: tops.map((c) => ({ id: c.id, nombre: c.name, gastado: catSpent(c.id, from, to) })).filter((x) => x.gastado).sort((x, y) => y.gastado - x.gastado).map((x) => ({ ...x, gastado: M(x.gastado) })) };
   }
-  const list = S.live.filter((t) => (!a.texto || C.normalize(`${t.concept} ${catName(t.categoryId)} ${t.notes || ""}`).includes(C.normalize(a.texto)))
+  const list = S.live.filter((t) => (!a.texto || C.normalize(`${t.concept} ${catName(t.categoryId)} ${t.notes || ""} ${t.who || ""}`).includes(C.normalize(a.texto)))
     && (!a.categoria_id || C.subtree(a.categoria_id, db.categories).has(t.categoryId)) && (!a.desde || C.dateOf(t.dateTime) >= a.desde)
     && (!a.hasta || C.dateOf(t.dateTime) <= a.hasta) && (!a.tipo || t.kind === a.tipo))
     .sort((x, y) => (x.dateTime < y.dateTime ? 1 : -1));
@@ -644,7 +790,7 @@ function propose(tool, a) {
       const t = db.transactions.find((x) => x.id === a.id && !x.deleted); if (!t) return { ok: false, error: "no existe ese id" };
       const ch = []; if (a.importe != null) ch.push(`importe ${M(t.amount)} → ${M(euros(a.importe))}`); if (a.concepto) ch.push(`concepto «${a.concepto}»`);
       if (a.categoria_id) { if (!findCat(a.categoria_id)) return { ok: false, error: "categoría inexistente" }; ch.push(`categoría ${catName(a.categoria_id)}`); }
-      if (a.fecha || a.hora) ch.push(`fecha ${a.fecha || C.dateOf(t.dateTime)} ${a.hora || t.dateTime.slice(11)}`); if (a.cuenta_id) ch.push(`cuenta ${accName(a.cuenta_id)}`);
+      if (a.fecha || a.hora) ch.push(`fecha ${a.fecha || C.dateOf(t.dateTime)} ${a.hora || t.dateTime.slice(11)}`); if (a.cuenta_id) ch.push(`cuenta ${accName(a.cuenta_id)}`); if (a.persona) ch.push(`${t.kind === "GASTO" ? "para" : "de"} ${a.persona}`);
       title = "Editar movimiento"; text = `${t.concept || "Movimiento"} (${C.fmtDay(C.dateOf(t.dateTime))}): ${ch.join(", ") || "sin cambios"}`; break;
     }
     case "eliminar_movimiento": { const t = db.transactions.find((x) => x.id === a.id && !x.deleted); if (!t) return { ok: false, error: "no existe ese id" }; title = "Eliminar movimiento"; text = `${t.concept || "Movimiento"} · ${M(t.amount)} · ${C.fmtDay(C.dateOf(t.dateTime))}`; break; }
@@ -687,7 +833,7 @@ function applyAction(tool, a) {
   const done = (comment, mood) => { save(); compute(); return { comment: typeof comment === "function" ? comment() : comment, mood }; };
   switch (tool) {
     case "editar_movimiento": { const t = db.transactions.find((x) => x.id === a.id); const x = { ...t };
-      if (a.importe != null) x.amount = euros(a.importe); if (a.concepto) x.concept = a.concepto; if (a.categoria_id) x.categoryId = a.categoria_id; if (a.cuenta_id) x.accountId = a.cuenta_id;
+      if (a.importe != null) x.amount = euros(a.importe); if (a.persona) setWho(x, a.persona); if (a.concepto) x.concept = a.concepto; if (a.categoria_id) x.categoryId = a.categoria_id; if (a.cuenta_id) x.accountId = a.cuenta_id;
       if (a.fecha || a.hora) x.dateTime = `${a.fecha || C.dateOf(t.dateTime)}T${a.hora || t.dateTime.slice(11)}`; upsertTx(x); return done(() => Lines.edited(x)); }
     case "eliminar_movimiento": { const t = db.transactions.find((x) => x.id === a.id); upsertTx({ ...t, deleted: true }); return done(() => Lines.deleted(t)); }
     case "confirmar_previsto": { const t = db.transactions.find((x) => x.id === a.id); const x = C.confirmTx(t, a.importe_real != null ? euros(a.importe_real) : t.amount); upsertTx(x); return done(() => Lines.confirmed(x)); }
@@ -724,7 +870,7 @@ function selectTx(a) {
   if (a.ids?.length) return S.live.filter((t) => a.ids.includes(t.id));
   const cat = a.categoria_id || a.categoria_actual_id;
   if (!a.texto && !cat && !a.cuenta_id && !a.desde && !a.hasta && !a.tipo) return [];
-  return S.live.filter((t) => (!a.texto || C.normalize(`${t.concept} ${t.notes || ""}`).includes(C.normalize(a.texto)))
+  return S.live.filter((t) => (!a.texto || C.normalize(`${t.concept} ${t.notes || ""} ${t.who || ""}`).includes(C.normalize(a.texto)))
     && (!cat || C.subtree(cat, db.categories).has(t.categoryId)) && (!a.cuenta_id || t.accountId === a.cuenta_id || t.toAccountId === a.cuenta_id)
     && (!a.desde || C.dateOf(t.dateTime) >= a.desde) && (!a.hasta || C.dateOf(t.dateTime) <= a.hasta) && (!a.tipo || t.kind === a.tipo));
 }
@@ -805,7 +951,8 @@ async function importStatement(file) {
         if (f.lims?.checked) p.limits.forEach((l) => { const c = db.categories.find((x) => x.id === l.categoryId); if (c && !c.limit) c.limit = l.monthly; });
         if (f.bal?.checked && p.opening != null) target.opening = p.opening;
         save(); closeSheet(); render(); compute();
-        talk(importComment(p, target), Lines.mood());
+        const nb = pendingBizums().length;
+        talk(importComment(p, target) + (nb ? ` Hay ${nb} bizums sin nombre: te los he dejado en tareas, en Inicio.` : ""), Lines.mood());
       });
     });
   };

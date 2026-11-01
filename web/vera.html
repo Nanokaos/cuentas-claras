@@ -690,7 +690,11 @@ function pose() {
   const px = clock - pointer.t < 4 ? (pointer.x / W - .5) : 0, py = clock - pointer.t < 4 ? (pointer.y / H - .5) : 0;
   camera.position.set(camBase.x + (RM ? 0 : px * .25 + Math.sin(clock * .2) * .05), camBase.y + (RM ? 0 : -py * .12 + Math.sin(clock * .27) * .03), camBase.z);
   camera.lookAt(camLook);
+  if (PORTRAIT) { head.getWorldPosition(tmpV); camera.position.copy(tmpV).add(PORTRAIT.off); camera.lookAt(tmpV.clone().add(PORTRAIT.look)); }
 }
+// Retrato para el icono y la pantalla de bienvenida: vera.html?retrato=dx,dy,dz,lx,ly,lz
+const PORTRAIT = (() => { const q = new URLSearchParams(location.search).get("retrato"); if (q == null) return null;
+  const v = (q || "0.35,0.1,1.25,0,0,0").split(",").map(Number); return { off: new THREE.Vector3(v[0], v[1], v[2]), look: new THREE.Vector3(v[3] || 0, v[4] || 0, v[5] || 0) }; })();
 
 function bubbleLayout() {
   if (!bubble.classList.contains("show")) return;
@@ -717,7 +721,7 @@ let last = performance.now();
 function frame(now) {
   const dt = clamp((now - last) / 1000, 0, .05); last = now;
   if (dt === 0) { requestAnimationFrame(frame); return; }
-  update(dt); pose(); drawEye(); composer.render(); bubbleLayout();
+  update(dt); pose(); drawEye(); composer.render(); bubbleLayout(); window.__frames = (window.__frames || 0) + 1;
   requestAnimationFrame(frame);
 }
 new ResizeObserver(resize).observe(stage); resize(); parent.postMessage({ vera: "ready" }, "*");

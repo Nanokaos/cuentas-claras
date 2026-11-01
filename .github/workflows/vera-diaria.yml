@@ -1,0 +1,29 @@
+name: Frase diaria de Vera
+on:
+  schedule:
+    - cron: "0 8 * * *"   # 10:00 en Madrid en horario de verano
+    - cron: "0 9 * * *"   # 10:00 en Madrid en horario de invierno
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-save web-push@3
+      - run: node push/send.mjs
+        env:
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          SCHEDULE: ${{ github.event.schedule }}
+      # GitHub pausa las tareas programadas tras 60 días sin cambios en el repositorio: una marca mensual lo evita.
+      - name: Mantener activa la tarea
+        if: github.event.schedule == '0 9 * * *'
+        run: |
+          if [ "$(date -u +%d)" = "01" ]; then
+            date -u +%F > push/keepalive.txt
+            git config user.name "veranza-bot"; git config user.email "veranza-bot@users.noreply.github.com"
+            git add push/keepalive.txt && git commit -m "Mantener activa la frase diaria" && git push || true
+          fi

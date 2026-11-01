@@ -205,6 +205,11 @@ export function plan(db, st, accountId, ownerId, now) {
     const isIncomeCat = cat.startsWith("ing-");
     return { ...base, kind: r.amount < 0 ? "GASTO" : isIncomeCat ? "INGRESO" : "DEVOLUCION", accountId, categoryId: cat };
   });
+  // Lo que ya habías corregido en una importación anterior (nombre del bizum, categoría) se conserva al reimportar.
+  const before = new Map(remove.filter((t) => t.imported).map((t) => [t.id, t]));
+  for (const t of add) { const o = before.get(t.id); if (!o) continue;
+    if (o.who) { t.who = o.who; t.concept = o.concept; } if (o.whoUnknown) t.whoUnknown = true;
+    if (o.categoryId && o.categoryId !== t.categoryId && o.kind === t.kind) t.categoryId = o.categoryId; }
   const rows = st.rows.length;
   const { confirmed, paired, dropped } = pairTransfers(db, add, remove, accountId, from, to);
   const usedCats = new Set(add.map((t) => t.categoryId).filter(Boolean));
