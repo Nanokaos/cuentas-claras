@@ -71,3 +71,9 @@ Ajustes → «Importar extracto» o Movimientos → «Importar extracto». Admit
 - Dentro del periodo del extracto, todo lo anotado en esa cuenta se sustituye por lo del banco. Lo apuntado en efectivo se conserva.
 - Clasifica por comercio (Mercadona → Supermercado, Glovo → Comida a domicilio, gasolineras → Transporte…) y crea las categorías que falten.
 - Propone presupuestos con tu media mensual y ajusta el saldo para que cuadre con el banco.
+
+## Dos cuentas: nómina/ahorro y gasto
+- En Cuentas, «¿Cobras en una cuenta y gastas desde otra?» prepara las dos. Solo la de gasto cuenta como disponible.
+- «he pasado 900 de ahorro a gasto» · «pasa 50 de gasto a efectivo» → traspaso (no es ingreso ni gasto).
+- Al importar un extracto, la cuenta se reconoce por el IBAN (la primera vez se pregunta y se recuerda).
+- Los traspasos que ya dijiste se confirman con el extracto por importe y fecha (±3 días); los de dos extractos se unen en uno.

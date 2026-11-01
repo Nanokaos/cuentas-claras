@@ -234,7 +234,9 @@ function budgets() {
 function accounts() {
   return `<h2>Cuentas <button class="link" data-account="">Añadir</button></h2>
   <section class="card"><div class="label">Saldo total</div><div class="mid">${M(S.pay.totalBalance)}</div><div class="label">Saldo líquido (para gastar)</div><div>${M(S.pay.liquidBalance)}</div></section>
-  ${db.accounts.filter((a) => !a.archived).map((a) => `<button class="card row" data-account="${a.id}"><span><b>${esc(a.name)}</b><small>${TYPES[a.type]}${a.liquid ? "" : " · no se usa para gastar"}</small></span><span class="${S.bal[a.id] < 0 ? "neg" : ""}">${M(S.bal[a.id] ?? 0)}</span></button>`).join("")}
+  ${db.accounts.filter((a) => !a.archived).map((a) => { const m = monthFlow(a.id); return `<button class="card row" data-account="${a.id}"><span><b>${esc(a.name)}</b><small>${TYPES[a.type]}${a.liquid ? " · para gastar" : " · ahorro, no se usa para gastar"}${a.iban ? " · ···" + esc(a.iban.slice(-4)) : ""}</small>${m.in || m.out ? `<small>Este mes: entra ${M(m.in)} · sale ${M(m.out)}${m.toSpend ? ` · ${a.liquid ? "recibido del ahorro" : "pasado a gasto"} ${M(m.toSpend)}` : ""}</small>` : ""}</span><span class="${S.bal[a.id] < 0 ? "neg" : ""}">${M(S.bal[a.id] ?? 0)}</span></button>`; }).join("")}
+  ${db.accounts.some((a) => !a.archived && !a.liquid && a.type === "CORRIENTE") ? "" : `<button class="card" data-act="two-accounts"><b>¿Cobras en una cuenta y gastas desde otra?</b><small class="muted">Prepara una cuenta de nómina y ahorro y otra de gasto. Solo cuenta como disponible lo que hay en la de gasto.</small></button>`}
+  <p class="muted small">Al importar un extracto, la cuenta se reconoce por su IBAN. Los traspasos entre tus cuentas se emparejan solos y no cuentan como ingreso ni gasto. También puedes decir: «he pasado 900 de ahorro a gasto».</p>
   <p class="muted small">Saldo = saldo inicial + movimientos realizados. Los previstos no cuentan hasta que se confirman.</p>`;
 }
 function settings() {
@@ -267,7 +269,7 @@ function settings() {
     <label class="btn file">Importar extracto del banco (PDF, Excel o CSV)<input type="file" class="bankFile" accept=".pdf,.xlsx,.xls,.ods,.csv,application/pdf"></label>
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Cuentas Claras · versión 2026.11.01e · coste 0 €.</p>`;
+  <p class="muted small">Cuentas Claras · versión 2026.11.01f · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -346,20 +348,23 @@ function quickEntry(text) {
 function showDrafts() {
   openSheet(`<h3>${drafts.length === 1 ? "Confirma el movimiento" : `Confirma ${drafts.length} movimientos`}</h3>
     <form id="dForm" class="form">${drafts.map((d, i) => `<fieldset data-i="${i}">
-      <div class="two"><label>Tipo<select name="kind"><option value="GASTO" ${d.kind === "GASTO" ? "selected" : ""}>Gasto</option><option value="INGRESO" ${d.kind === "INGRESO" ? "selected" : ""}>Ingreso</option></select></label>
+      <div class="two"><label>Tipo<select name="kind"><option value="GASTO" ${d.kind === "GASTO" ? "selected" : ""}>Gasto</option><option value="INGRESO" ${d.kind === "INGRESO" ? "selected" : ""}>Ingreso</option><option value="TRASPASO" ${d.kind === "TRASPASO" ? "selected" : ""}>Traspaso</option></select></label>
       <label>Importe (€)<input inputmode="decimal" name="amount" value="${moneyInput(d.amount)}"></label></div>
       <label>Concepto<input name="concept" value="${esc(d.concept)}"></label>
-      <div class="two"><label>Cuenta<select name="accountId">${accOptions(d.accountId)}</select></label><label>Categoría<select name="categoryId">${catOptions(d.kind, d.categoryId)}</select></label></div>
+      <div class="two"><label><span class="lAcc">${d.kind === "TRASPASO" ? "Desde" : "Cuenta"}</span><select name="accountId">${accOptions(d.accountId)}</select></label><label class="lCat" ${d.kind === "TRASPASO" ? "hidden" : ""}>Categoría<select name="categoryId">${catOptions(d.kind === "TRASPASO" ? "GASTO" : d.kind, d.categoryId)}</select></label><label class="lTo" ${d.kind === "TRASPASO" ? "" : "hidden"}>Hacia<select name="toAccountId">${accOptions(d.toAccountId, d.accountId)}</select></label></div>
       <div class="two"><label>Fecha<input type="date" name="date" value="${d.dateTime.slice(0, 10)}"></label><label>Hora<input type="time" name="time" value="${d.dateTime.slice(11, 16)}"></label></div>
       <p class="w small dup" hidden></p></fieldset>`).join("")}
       <div class="actions"><button class="btn" type="submit">Guardar</button><button class="btn ghost" type="button" id="dDiscard">Descartar</button></div></form>`, (root) => {
     const f = $("#dForm", root);
     const read = () => [...f.querySelectorAll("fieldset")].map((fs) => { const g = (n) => fs.querySelector(`[name=${n}]`).value; const d = drafts[fs.dataset.i];
       const dateTime = `${g("date")}T${g("time") || "12:00"}`, future = dateTime > C.nowLocal();
-      return { ...d, kind: g("kind"), amount: C.parseMoney(g("amount")), concept: g("concept").trim(), accountId: g("accountId"), categoryId: g("categoryId"), dateTime, status: future ? "PREVISTO" : "REALIZADO", planned: future, estimated: false }; });
+      const kind = g("kind"); return { ...d, kind, amount: C.parseMoney(g("amount")), concept: g("concept").trim(), accountId: g("accountId"), categoryId: kind === "TRASPASO" ? null : g("categoryId"), toAccountId: kind === "TRASPASO" ? g("toAccountId") : null, dateTime, status: future ? "PREVISTO" : "REALIZADO", planned: future, estimated: false }; });
     const check = () => read().forEach((x, i) => { const p = f.querySelectorAll(".dup")[i], dup = x.amount > 0 ? C.duplicateSuspects(x, S.live)[0] : null; p.hidden = !dup; if (dup) p.textContent = `Parece repetido: ya tienes «${dup.concept}» con el mismo importe.`; });
     f.addEventListener("input", check); check();
-    f.addEventListener("submit", (e) => { e.preventDefault(); const list = read(); if (list.some((x) => !(x.amount > 0))) return toast("Revisa los importes."); list.forEach(upsertTx); drafts = []; closeSheet(); afterSave(list); });
+    f.addEventListener("change", (e) => { if (e.target.name !== "kind") return; const fs = e.target.closest("fieldset"), tr = e.target.value === "TRASPASO";
+      fs.querySelector(".lCat").hidden = tr; fs.querySelector(".lTo").hidden = !tr; fs.querySelector(".lAcc").textContent = tr ? "Desde" : "Cuenta"; });
+    f.addEventListener("submit", (e) => { e.preventDefault(); const list = read(); if (list.some((x) => !(x.amount > 0))) return toast("Revisa los importes.");
+      if (list.some((x) => x.kind === "TRASPASO" && (!x.toAccountId || x.toAccountId === x.accountId))) return toast("Elige dos cuentas distintas para el traspaso."); list.forEach(upsertTx); drafts = []; closeSheet(); afterSave(list); });
     $("#dDiscard", root).addEventListener("click", () => { drafts = []; closeSheet(); talk(Lines.discarded(), Lines.mood()); });
   });
 }
@@ -388,6 +393,7 @@ document.addEventListener("click", (e) => {
   if (el.dataset.filter) { filter = el.dataset.filter; return render(); }
   if (el.dataset.limit) return categorySheet(el.dataset.limit);
   if ("account" in el.dataset) return accountSheet(el.dataset.account);
+  if (el.dataset.act === "two-accounts") return twoAccountsSheet();
   if ("savePlan" in el.dataset) { const b = C.parseMoney($("#sBuf").value || "0"), s = C.parseMoney($("#sSav").value || "0"); if (b == null || s == null) return toast("Revisa los importes."); applyPlan({ nextPayday: $("#sPay").value || null, buffer: b, monthlySavings: s }); return; }
   if ("saveAi" in el.dataset) { db.settings.groqKey = $("#sKey").value.trim(); db.settings.proxy = $("#sProxy").value.trim(); db.settings.aiModel = $("#sModel").value.trim(); save(); render(); return talk(db.settings.groqKey || db.settings.proxy ? Lines.aiOn() : "Sin clave sigo entendiendo gastos e ingresos y órdenes sencillas. Para conversar de verdad necesito tu clave gratuita de Groq.", Lines.mood()); }
   if ("clearChat" in el.dataset) { db.chat = []; save(); return toast("Historial de conversación borrado."); }
@@ -426,18 +432,62 @@ $("#sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") clos
 // la mirada de Vera sigue al dedo también fuera de su escena
 addEventListener("pointermove", (e) => { if (tab !== "inicio" || !veraReady) return; const r = frame.getBoundingClientRect(); frame.contentWindow.postMessage({ pointer: { x: e.clientX - r.left, y: e.clientY - r.top } }, "*"); }, { passive: true });
 
+/** Entradas y salidas del mes en una cuenta, y lo movido entre ahorro y gasto. */
+function monthFlow(id) {
+  const from = C.dateOf(S.now).slice(0, 8) + "01", to = C.dateOf(S.now), r = { in: 0, out: 0, toSpend: 0 };
+  const isSpend = (aid) => db.accounts.find((a) => a.id === aid)?.liquid;
+  for (const t of S.live) {
+    if (C.effectiveStatus(t, S.now) !== "REALIZADO" || C.dateOf(t.dateTime) < from || C.dateOf(t.dateTime) > to) continue;
+    for (const [aid, v] of effects(t)) if (aid === id) { if (v > 0) r.in += v; else r.out -= v; }
+    if (t.kind === "TRASPASO" && (t.accountId === id || t.toAccountId === id) && isSpend(t.toAccountId) && !isSpend(t.accountId)) r.toSpend += t.amount;
+  }
+  return r;
+}
+const effects = (t) => t.kind === "TRASPASO" ? [[t.accountId, -t.amount], [t.toAccountId, t.amount]] : t.kind === "GASTO" || t.kind === "LIQUIDACION" ? [[t.accountId, -t.amount]] : [[t.accountId, t.amount]];
+
+/** Prepara las dos cuentas: nómina/ahorro (no para gastar) y gasto (para gastar). */
+function twoAccountsSheet() {
+  const cur = db.accounts.filter((a) => !a.archived && a.type !== "EFECTIVO");
+  openSheet(`<h3>Nómina y gasto</h3>
+    <p>La cuenta de <b>nómina</b> guarda lo que ahorras y no cuenta para gastar. La de <b>gasto</b> es de donde sale tu día a día y tus suscripciones: el disponible se calcula solo con ella.</p>
+    <form class="form" id="twoForm">
+      <label>Tu cuenta «${esc(cur[0]?.name || "Cuenta corriente")}» es…<select name="role"><option value="gasto">la de gasto</option><option value="nomina">la de nómina y ahorro</option></select></label>
+      <label>Nombre de la cuenta de gasto<input name="gasto" value="Gasto"></label>
+      <label>Nombre de la cuenta de nómina<input name="nomina" value="Nómina y ahorro"></label>
+      <p class="muted small">Tu ahorro mensual pasará a 0 €: lo que ahorras ya se queda en la cuenta de nómina y no hace falta reservarlo de la de gasto.</p>
+      <div class="actions"><button class="btn">Preparar</button><button class="btn ghost" type="button" data-close>Cancelar</button></div></form>`, (root) => {
+    $("#twoForm", root).addEventListener("submit", (e) => {
+      e.preventDefault(); const f = e.target; snapshot("preparar las cuentas de nómina y gasto");
+      let base = cur[0]; if (!base) { base = { id: uid(), ownerId: ME, name: "", type: "CORRIENTE", opening: 0, liquid: true }; db.accounts.push(base); }
+      const isSpend = f.role.value === "gasto";
+      Object.assign(base, { name: (isSpend ? f.gasto : f.nomina).value.trim() || (isSpend ? "Gasto" : "Nómina y ahorro"), type: "CORRIENTE", liquid: isSpend });
+      const otherName = (isSpend ? f.nomina : f.gasto).value.trim() || (isSpend ? "Nómina y ahorro" : "Gasto");
+      let other = cur.find((a) => a !== base && a.liquid === !isSpend);
+      if (other) Object.assign(other, { name: otherName, type: "CORRIENTE" }); else db.accounts.push({ id: uid(), ownerId: ME, name: otherName, type: "CORRIENTE", opening: 0, liquid: !isSpend });
+      db.settings.monthlySavings = 0;
+      save(); closeSheet(); render();
+      talk(pickL("Listo: dos cuentas. Solo cuento como disponible la de gasto. Importa el extracto de cada una y las reconoceré por el IBAN.",
+        "Hecho. La de nómina guarda, la de gasto gasta. Importa los dos extractos y yo emparejo los traspasos.",
+        "Dos cuentas. Una para ahorrar y otra para fundirte el dinero. Al menos ahora sabré cuál vigilar. Importa los extractos.",
+        "Una cuenta para ahorrar y otra para despilfarrar. Apuesto a cuál se vacía antes. Sube los extractos.",
+        "Dos cuentas. Has separado el dinero que respetas del que vas a quemar. Primer acto de inteligencia registrado. Sube los extractos."), Lines.mood());
+    });
+  });
+}
+
 function accountSheet(id) {
   const a = id ? db.accounts.find((x) => x.id === id) : { id: uid(), ownerId: ME, name: "", type: "CORRIENTE", opening: 0, liquid: true };
   openSheet(`<h3>${id ? "Editar cuenta" : "Nueva cuenta"}</h3><form class="form" id="aForm">
     <label>Nombre<input name="name" value="${esc(a.name)}" required></label>
     <label>Tipo<select name="type">${Object.entries(TYPES).map(([k, l]) => `<option value="${k}" ${k === a.type ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     <label>Saldo inicial (€)<input inputmode="decimal" name="opening" value="${moneyInput(a.opening)}"></label>
-    <label class="sw"><span>Dinero para gastar<small>Desactívalo en cuentas de ahorro o inversión.</small></span><input type="checkbox" name="liquid" ${a.liquid ? "checked" : ""}></label>
+    <label class="sw"><span>Dinero para gastar<small>Desactívalo en la cuenta de nómina y ahorro: su saldo no contará como disponible.</small></span><input type="checkbox" name="liquid" ${a.liquid ? "checked" : ""}></label>
+    <label>IBAN (opcional)<input name="iban" value="${esc(a.iban || "")}" placeholder="Se rellena solo al importar un extracto" autocomplete="off"></label>
     <div class="actions"><button class="btn">Guardar</button><button class="btn ghost" type="button" data-close>Cancelar</button></div></form>`, (root) => {
     const f = $("#aForm", root);
     f.type.addEventListener("change", () => { f.liquid.checked = !["AHORRO", "INVERSION"].includes(f.type.value); });
     f.addEventListener("submit", (e) => { e.preventDefault(); const op = C.parseMoney(f.opening.value || "0"); if (op == null) return toast("Saldo inicial no válido.");
-      const x = { ...a, name: f.name.value.trim(), type: f.type.value, opening: op, liquid: f.liquid.checked };
+      const x = { ...a, name: f.name.value.trim(), type: f.type.value, opening: op, liquid: f.liquid.checked, iban: Importer.cleanIban(f.iban.value) || null };
       const i = db.accounts.findIndex((y) => y.id === x.id); if (i >= 0) db.accounts[i] = x; else db.accounts.push(x); save(); closeSheet(); render(); talk(Lines.accountSaved(x, i < 0), Lines.mood()); });
   });
 }
@@ -584,8 +634,10 @@ function propose(tool, a) {
     case "registrar_movimientos": {
       const list = (a.movimientos || []).map((m) => ({ id: uid(), ownerId: ME, kind: m.tipo === "INGRESO" ? "INGRESO" : m.tipo === "TRASPASO" ? "TRASPASO" : "GASTO", amount: euros(m.importe),
         concept: m.concepto || "", dateTime: `${m.fecha || C.dateOf(C.nowLocal())}T${m.hora || C.nowLocal().slice(11)}`, accountId: db.accounts.some((x) => x.id === m.cuenta_id) ? m.cuenta_id : db.accounts.find((x) => x.liquid)?.id,
-        toAccountId: m.cuenta_destino_id || null, categoryId: findCat(m.categoria_id) ? m.categoria_id : (m.tipo === "INGRESO" ? "ing-extra" : "otros"), notes: "" }));
+        toAccountId: m.tipo === "TRASPASO" && db.accounts.some((x) => x.id === m.cuenta_destino_id) ? m.cuenta_destino_id : null,
+        categoryId: m.tipo === "TRASPASO" ? null : findCat(m.categoria_id) ? m.categoria_id : (m.tipo === "INGRESO" ? "ing-extra" : "otros"), notes: "" }));
       if (!list.length || list.some((m) => !(m.amount > 0))) return { ok: false, error: "importe no válido" };
+      if (list.some((m) => m.kind === "TRASPASO" && (!m.toAccountId || m.toAccountId === m.accountId))) return { ok: false, error: "traspaso sin cuenta de origen y destino distintas (usa cuenta_id y cuenta_destino_id del contexto)" };
       drafts = list; showDrafts(); talk(Lines.draftsReady(list.length), "neutral", "atencion", { log: false }); return { ok: true };
     }
     case "editar_movimiento": {
@@ -695,8 +747,6 @@ function undo() {
 
 // ======================= Importar extracto =======================
 async function importStatement(file) {
-  const acc = db.accounts.find((a) => a.type === "CORRIENTE" && !a.archived) || db.accounts.find((a) => a.liquid && !a.archived);
-  if (!acc) return talk("Primero crea una cuenta corriente para importar el extracto.", "neutral");
   if ($("#chat").open) $("#chat").close();
   vera((v) => { v.setState("pensando"); v.show("Leyendo el extracto…"); });
   const t = $("#toast"); const progress = (msg) => { vera((v) => v.show(msg)); t.textContent = msg; t.classList.add("show"); };
@@ -707,51 +757,87 @@ async function importStatement(file) {
     st = r.kind === "text" ? Importer.parseStatementText(r.text) : Importer.parseStatementRows(r.rows);
   } catch (err) { t.classList.remove("show"); vera((v) => v.setState("reposo")); return talk("No he podido leer el extracto: " + err.message, "neutral"); }
   t.classList.remove("show"); compute();
-  const p = Importer.plan(db, st, acc.id, ME, C.nowLocal());
+  // ¿De qué cuenta es? Por el IBAN; si no se conoce, se pregunta y se recuerda.
+  const banks = db.accounts.filter((a) => !a.archived && a.type !== "EFECTIVO");
+  const known = Importer.accountForIban(banks, st.iban);
+  const guess = known || banks.find((a) => !a.iban && a.liquid) || banks.find((a) => !a.iban) || banks[0];
+  const ibanTxt = st.iban ? `IBAN acabado en ${st.iban.slice(-4)}` : "sin IBAN en el extracto";
   vera((v) => v.setState("atencion"));
-  openSheet(`<h3>Importar extracto</h3>
-    <p>Del ${C.fmtDay(p.from)} ${p.from.slice(0, 4)} al ${C.fmtDay(p.to)} ${p.to.slice(0, 4)} · cuenta <b>${esc(acc.name)}</b></p>
-    <div class="line"><span>Movimientos del banco</span><span>${p.add.length}</span></div>
-    <div class="line"><span>Entradas</span><span class="pos">${M(p.income)}</span></div>
-    <div class="line"><span>Gastos</span><span>${M(p.spent)}</span></div>
-    <div class="line"><span>Anotaciones de esa cuenta en ese periodo que se sustituyen</span><span class="w">${p.remove.length}</span></div>
-    ${p.check?.checked ? `<p class="muted small">Comprobación con el saldo del banco: ${p.check.ok} de ${p.check.checked} filas cuadran.</p>` : ""}
-    ${p.warnings.map((w) => `<p class="w small">${esc(w)}</p>`).join("")}
+  if (!known) talk(st.iban ? pickL(`No conozco la cuenta ${ibanTxt}. Dime cuál es y la recordaré.`, `Cuenta nueva para mí: ${ibanTxt}. ¿Cuál es?`, `Un IBAN desconocido, acabado en ${st.iban.slice(-4)}. Dime de qué cuenta es; yo lo recordaré, tú seguramente no.`, `IBAN acabado en ${st.iban.slice(-4)}. ¿Cuál de tus cuentas es? Elige bien, que me conozco tu historial.`, `IBAN acabado en ${st.iban.slice(-4)}. Dime de qué cuenta es. Intenta no equivocarte también en esto.`) : "El extracto no trae IBAN. Elige de qué cuenta es.", "neutral", "atencion", { log: false });
+  const opts = (sel) => banks.map((a) => `<option value="${a.id}" ${a.id === sel ? "selected" : ""}>${esc(a.name)}${a.liquid ? " (gasto)" : " (ahorro)"}${a.iban ? " · ···" + esc(a.iban.slice(-4)) : ""}</option>`).join("")
+    + `<option value="new-spend">Nueva cuenta de gasto</option><option value="new-save">Nueva cuenta de nómina y ahorro</option>`;
+  const draw = (accId) => {
+    const isNew = accId.startsWith("new-");
+    const acc = isNew ? { id: uid(), ownerId: ME, name: accId === "new-save" ? "Nómina y ahorro" : "Gasto", type: "CORRIENTE", opening: 0, liquid: accId === "new-spend" } : db.accounts.find((a) => a.id === accId);
+    const p = Importer.plan(isNew ? { ...db, accounts: [...db.accounts, acc] } : db, st, acc.id, ME, C.nowLocal());
+    openSheet(`<h3>Importar extracto</h3>
+    <p>Del ${C.fmtDay(p.from)} ${p.from.slice(0, 4)} al ${C.fmtDay(p.to)} ${p.to.slice(0, 4)} · ${esc(ibanTxt)}</p>
     <form id="impForm" class="form">
+      <label>${known ? "Cuenta reconocida por el IBAN" : "¿De qué cuenta es este extracto?"}<select name="acc">${opts(isNew ? accId : acc.id)}</select></label>
+      ${st.iban && !known ? `<p class="muted small">Recordaré este IBAN para la próxima vez.</p>` : ""}
+      <div class="line"><span>Movimientos del banco</span><span>${p.rows}</span></div>
+      <div class="line"><span>Entradas</span><span class="pos">${M(p.income)}</span></div>
+      <div class="line"><span>Gastos</span><span>${M(p.spent)}</span></div>
+      ${p.confirmed ? `<div class="line"><span>Traspasos que ya habías apuntado, confirmados</span><span>${p.confirmed}</span></div>` : ""}
+      ${p.paired ? `<div class="line"><span>Traspasos emparejados con tu otra cuenta</span><span>${p.paired}</span></div>` : ""}
+      <div class="line"><span>Anotaciones de esa cuenta en ese periodo que se sustituyen</span><span class="w">${p.remove.filter((x) => x.accountId === acc.id || x.toAccountId === acc.id).length}</span></div>
+      ${p.check?.checked ? `<p class="muted small">Comprobación con el saldo del banco: ${p.check.ok} de ${p.check.checked} filas cuadran.</p>` : ""}
+      ${p.warnings.map((w) => `<p class="w small">${esc(w)}</p>`).join("")}
       ${p.opening != null ? `<label class="sw"><span>Ajustar el saldo de ${esc(acc.name)} a ${M(st.balance)}<small>Para que cuadre con el banco.</small></span><input type="checkbox" name="bal" checked></label>` : ""}
       ${p.newCats.length ? `<label class="sw"><span>Crear categorías<small>${esc(p.newCats.map((c) => c.name).join(", "))}</small></span><input type="checkbox" name="cats" checked></label>` : ""}
-      ${p.limits.length ? `<label class="sw"><span>Crear presupuestos con tu media mensual<small>${esc(p.limits.map((l) => `${l.name} ${M(l.monthly)}`).join(" · "))}</small></span><input type="checkbox" name="lims" checked></label>` : ""}
+      ${p.limits.length && acc.liquid ? `<label class="sw"><span>Crear presupuestos con tu media mensual<small>${esc(p.limits.map((l) => `${l.name} ${M(l.monthly)}`).join(" · "))}</small></span><input type="checkbox" name="lims" checked></label>` : ""}
       <p class="muted small">Podrás deshacer la importación desde Ajustes o diciéndoselo a Vera.</p>
       <div class="actions"><button class="btn">Importar</button><button class="btn ghost" type="button" data-close>Cancelar</button></div>
     </form>`, (root) => {
-    $("#impForm", root).addEventListener("submit", (e) => {
-      e.preventDefault(); const f = e.target;
-      snapshot(`importar el extracto del ${C.fmtDay(p.from)} al ${C.fmtDay(p.to)}`);
-      const removeIds = new Set(p.remove.map((x) => x.id)), addIds = new Set(p.add.map((x) => x.id));
-      db.transactions = db.transactions.filter((x) => !removeIds.has(x.id) && !addIds.has(x.id));
-      db.transactions.push(...p.add);
-      if (f.cats?.checked) p.newCats.forEach((c) => db.categories.push({ ...c, custom: true }));
-      else p.add.forEach((x) => { if (p.newCats.some((c) => c.id === x.categoryId)) x.categoryId = x.kind === "INGRESO" || x.kind === "AJUSTE" ? "ing-extra" : "otros"; });
-      if (f.lims?.checked) p.limits.forEach((l) => { const c = db.categories.find((x) => x.id === l.categoryId); if (c && !c.limit) c.limit = l.monthly; });
-      if (f.bal?.checked && p.opening != null) acc.opening = p.opening;
-      save(); closeSheet(); render(); compute();
-      talk(importComment(p), Lines.mood());
+      const f = $("#impForm", root);
+      f.acc.addEventListener("change", () => draw(f.acc.value));
+      f.addEventListener("submit", (e) => {
+        e.preventDefault();
+        snapshot(`importar el extracto de ${acc.name} del ${C.fmtDay(p.from)} al ${C.fmtDay(p.to)}`);
+        if (isNew) db.accounts.push(acc);
+        const target = db.accounts.find((a) => a.id === acc.id);
+        if (st.iban) { db.accounts.forEach((a) => { if (a !== target && Importer.cleanIban(a.iban) === Importer.cleanIban(st.iban)) a.iban = null; }); target.iban = Importer.cleanIban(st.iban); }
+        const removeIds = new Set(p.remove.map((x) => x.id)), addIds = new Set(p.add.map((x) => x.id));
+        db.transactions = db.transactions.filter((x) => !removeIds.has(x.id) && !addIds.has(x.id));
+        db.transactions.push(...p.add);
+        if (f.cats?.checked) p.newCats.forEach((c) => db.categories.push({ ...c, custom: true }));
+        else p.add.forEach((x) => { if (p.newCats.some((c) => c.id === x.categoryId)) x.categoryId = x.kind === "INGRESO" || x.kind === "AJUSTE" ? "ing-extra" : "otros"; });
+        if (f.lims?.checked) p.limits.forEach((l) => { const c = db.categories.find((x) => x.id === l.categoryId); if (c && !c.limit) c.limit = l.monthly; });
+        if (f.bal?.checked && p.opening != null) target.opening = p.opening;
+        save(); closeSheet(); render(); compute();
+        talk(importComment(p, target), Lines.mood());
+      });
     });
-  });
+  };
+  draw(guess ? guess.id : "new-spend");
 }
-function importComment(p) {
+function importComment(p, acc) {
+  const pairs = p.confirmed + p.paired ? ` ${p.confirmed + p.paired} traspaso(s) entre tus cuentas cuadrados, sin contarlos dos veces.` : "";
+  if (acc && !acc.liquid) return pickL(`${acc.name} importada: entró ${M(p.income)} y tiene ${M(S.bal[acc.id] ?? 0)}.${pairs} No cuenta como disponible.`,
+    `${acc.name}: ${M(S.bal[acc.id] ?? 0)} guardados.${pairs}`,
+    `${acc.name} al día: ${M(S.bal[acc.id] ?? 0)}.${pairs} Ese dinero no se toca. Te lo digo por si acaso.`,
+    `${acc.name}: ${M(S.bal[acc.id] ?? 0)}.${pairs} Lo único sensato que tienes. No lo toques.`,
+    `${acc.name}: ${M(S.bal[acc.id] ?? 0)}.${pairs} Tu único logro financiero. Veremos cuánto le dura.`);
   const byCat = {};
   p.add.filter((x) => x.kind === "GASTO").forEach((x) => { const c = db.categories.find((y) => y.id === x.categoryId); const top = c?.parentId ? db.categories.find((y) => y.id === c.parentId) : c; const k = top?.name || "Otros"; byCat[k] = (byCat[k] ?? 0) + x.amount; });
   const [worst, amount] = Object.entries(byCat).filter(([k]) => k !== "Otros").sort((a, b) => b[1] - a[1])[0] || ["varios", 0];
-  return pickL(`Importados ${p.add.length} movimientos. Donde más gastas: ${worst}, ${M(amount)}. Hoy puedes gastar ${M(S.pay.today)}.`,
-    `${p.add.length} movimientos importados. Tu mayor gasto: ${worst} (${M(amount)}). Hoy: ${M(S.pay.today)}.`,
-    `He leído ${p.add.length} movimientos. ${M(amount)} en ${worst.toLowerCase()}. Fascinante. Hoy te quedan ${M(S.pay.today)}.`,
-    `${p.add.length} movimientos. ${M(amount)} en ${worst.toLowerCase()}. Ahora entiendo muchas cosas. Hoy: ${M(S.pay.today)}.`,
-    `${p.add.length} movimientos de pura incompetencia financiera. ${M(amount)} en ${worst.toLowerCase()}. Si esto fuera un experimento, ya lo habría cancelado. Hoy: ${M(S.pay.today)}.`);
+  return pickL(`Importados ${p.rows} movimientos. Donde más gastas: ${worst}, ${M(amount)}. Hoy puedes gastar ${M(S.pay.today)}.`,
+    `${p.rows} movimientos importados. Tu mayor gasto: ${worst} (${M(amount)}). Hoy: ${M(S.pay.today)}.`,
+    `He leído ${p.rows} movimientos. ${M(amount)} en ${worst.toLowerCase()}. Fascinante. Hoy te quedan ${M(S.pay.today)}.`,
+    `${p.rows} movimientos. ${M(amount)} en ${worst.toLowerCase()}. Ahora entiendo muchas cosas. Hoy: ${M(S.pay.today)}.`,
+    `${p.rows} movimientos de pura incompetencia financiera. ${M(amount)} en ${worst.toLowerCase()}. Si esto fuera un experimento, ya lo habría cancelado. Hoy: ${M(S.pay.today)}.`) + pairs;
 }
 
 function applyPlan(p) { Object.assign(db.settings, p); save(); render(); talk(Lines.planSaved(), Lines.mood()); }
 
+/** Cuenta por una palabra: su nombre o su papel («ahorro», «nómina», «gasto», «efectivo»). */
+function accByWord(w) {
+  const k = C.normalize(w).replace(/s$/, ""), live = db.accounts.filter((a) => !a.archived);
+  return live.find((a) => C.normalize(a.name) === k) || live.find((a) => C.normalize(a.name).includes(k))
+    || (/ahorr|nomin|sueldo/.test(k) ? live.find((a) => !a.liquid && a.type !== "INVERSION") : null)
+    || (/gast|diario|dia a dia/.test(k) ? live.find((a) => a.liquid && a.type !== "EFECTIVO") : null)
+    || (/efectiv|cartera|mano/.test(k) ? live.find((a) => a.type === "EFECTIVO") : null) || null;
+}
 /** Sin IA: gastos e ingresos con el intérprete local, y unas cuantas órdenes y preguntas habituales. */
 function localAsk(text, quiet = false) {
   const n = C.normalize(text);
@@ -776,6 +862,11 @@ function localAsk(text, quiet = false) {
   if (/por que|de donde sale|explica/.test(n)) return talk(Lines.explain(), Lines.mood());
   if (/(cuanto|que) .*(puedo gastar|me queda|tengo|disponible)|disponible/.test(n)) return talk(Lines.hello(), Lines.mood());
   if (/(ve|ir|abre|llevame)\s+(a\s+)?(los\s+)?(movimientos|presupuestos|cuentas|ajustes|inicio)/.test(n)) { location.hash = n.match(/(movimientos|presupuestos|cuentas|ajustes|inicio)/)[1]; return talk("Ahí lo tienes.", "neutral"); }
+  if ((m = n.match(/(?:he |hemos )?(?:pasado|traspasado|movido|transferido|pasa|pasame|traspasa|mueve)\s+(\d+(?:[.,]\d{1,2})?)\s*(?:euros?|€)?\s+(?:de|desde)\s+(?:la )?(?:cuenta )?(?:de )?(?:los |las |la |el )?([a-z ]+?)\s+(?:a|hacia)\s+(?:la )?(?:cuenta )?(?:de )?(?:los |las |la |el )?([a-z ]+?)\s*$/))) {
+    const from = accByWord(m[2]), to = accByWord(m[3]);
+    if (from && to && from !== to) return void propose("registrar_movimientos", { movimientos: [{ tipo: "TRASPASO", importe: C.parseMoney(m[1]) / 100, concepto: `Traspaso a ${to.name}`, cuenta_id: from.id, cuenta_destino_id: to.id }] });
+    if (!quiet) return talk("No sé qué cuentas son. Dímelo con sus nombres, por ejemplo: «he pasado 900 de nómina a gasto».", "neutral");
+  }
   if (C.parseEntry(text, C.nowLocal()).drafts.length) return quickEntry(text);
   if (!quiet) talk(pickL("Sin la clave de IA solo entiendo gastos, ingresos y órdenes sencillas, como «límite de ocio a 150». Añade tu clave gratuita de Groq en Ajustes para conversar.",
     "Eso necesita la IA. Añade tu clave gratuita de Groq en Ajustes. Mientras, dime gastos o «límite de ocio a 150».",

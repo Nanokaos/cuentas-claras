@@ -205,6 +205,8 @@ export function plan(db, st, accountId, ownerId, now) {
     const isIncomeCat = cat.startsWith("ing-");
     return { ...base, kind: r.amount < 0 ? "GASTO" : isIncomeCat ? "INGRESO" : "DEVOLUCION", accountId, categoryId: cat };
   });
+  const rows = st.rows.length;
+  const { confirmed, paired, dropped } = pairTransfers(db, add, remove, accountId, from, to);
   const usedCats = new Set(add.map((t) => t.categoryId).filter(Boolean));
   if (add.some((t) => t.kind === "AJUSTE")) usedCats.add("ing-traspaso");
   const newCats = Object.values(NEW_CATS).filter((c) => usedCats.has(c.id) && !db.categories.some((x) => x.id === c.id));
@@ -227,6 +229,60 @@ export function plan(db, st, accountId, ownerId, now) {
     opening = st.balance - after;
   }
   const income = add.filter((t) => t.kind === "INGRESO").reduce((s, t) => s + t.amount, 0), spent = add.filter((t) => t.kind === "GASTO").reduce((s, t) => s + t.amount, 0);
-  return { from, to, remove, add, newCats, limits, opening, income, spent, check: st.check, warnings: st.warnings };
+  const warnings = [...st.warnings, ...dropped.map((t) => `No aparece en el extracto el traspaso de ${C.fmtMoney(t.amount)} del ${C.fmtDay(C.dateOf(t.dateTime))} que apuntaste; se quita.`)];
+  return { from, to, rows, remove, add, newCats, limits, opening, income, spent, confirmed, paired, check: st.check, warnings };
 }
+
+// ——— Traspasos entre tus cuentas ———
+const NEAR_DAYS = 3;
+const TRANSFER_CATS = new Set(["ing-traspaso", "cat-transfer", "ing-extra"]);
+const transferish = (t) => TRANSFER_CATS.has(t.categoryId) || /\btrasp|\btransf/.test(C.normalize(t.concept || ""));
+const daysApart = (a, b) => Math.abs(C.dayNum(C.dateOf(a)) - C.dayNum(C.dateOf(b)));
+/** Efecto con signo de un movimiento de una sola cuenta. */
+const signed = (t) => (t.kind === "GASTO" || t.kind === "LIQUIDACION" ? -t.amount : t.kind === "AJUSTE" ? t.amount : t.amount);
+const best = (cands, date, pref) => cands.sort((a, b) => (pref(b) - pref(a)) || daysApart(a.dateTime, date) - daysApart(b.dateTime, date))[0];
+
+/**
+ * Empareja los movimientos del extracto con traspasos entre tus cuentas (modifica `add` y `remove`):
+ *  1. Un traspaso ya apuntado (a mano o de otro extracto) que coincide en importe, sentido y fecha (±3 días) se conserva y se marca como confirmado por el banco.
+ *  2. Una salida o entrada que coincide con la contraria ya importada de tu otra cuenta se une en un único traspaso.
+ * Si un traspaso apuntado no aparece en el extracto: si el otro banco ya lo confirmó, se queda solo esa mitad; si no, se quita.
+ */
+export function pairTransfers(db, add, remove, accountId, from, to) {
+  const mine = new Set(db.accounts.filter((a) => a.id !== accountId && !a.archived && a.type !== "EFECTIVO").map((a) => a.id));
+  const used = new Set(); let confirmed = 0, paired = 0; const dropped = [];
+  // 1. Traspasos ya apuntados que tocan esta cuenta dentro del periodo
+  for (const T of remove.filter((t) => t.kind === "TRASPASO" && (mine.has(t.accountId) || mine.has(t.toAccountId)))) {
+    const want = T.accountId === accountId ? -T.amount : T.amount;
+    const cands = add.filter((r) => !used.has(r) && r.kind !== "TRASPASO" && signed(r) === want && daysApart(r.dateTime, T.dateTime) <= NEAR_DAYS);
+    const r = best(cands, T.dateTime, (x) => (transferish(x) ? 1 : 0));
+    remove.splice(remove.indexOf(T), 1);
+    if (r) {
+      used.add(r); confirmed++;
+      add[add.indexOf(r)] = { ...T, dateTime: C.dateOf(r.dateTime) + T.dateTime.slice(10), status: "REALIZADO", bank: { ...(T.bank || {}), [accountId]: true } };
+    } else {
+      const other = T.accountId === accountId ? T.toAccountId : T.accountId;
+      remove.push(T);
+      if (T.bank?.[other]) add.push({ ...T, id: T.id + "-" + other, kind: "AJUSTE", amount: T.accountId === accountId ? T.amount : -T.amount, accountId: other, toAccountId: null, categoryId: "ing-traspaso", bank: { [other]: true } });
+      else dropped.push(T);
+    }
+  }
+  // 2. Mitades sueltas en tus otras cuentas (de extractos ya importados)
+  const removed = new Set(remove.map((t) => t.id));
+  const loose = db.transactions.filter((t) => !t.deleted && !removed.has(t.id) && mine.has(t.accountId) && t.kind !== "TRASPASO" && t.imported && transferish(t));
+  for (let i = 0; i < add.length; i++) {
+    const r = add[i]; if (used.has(r) || r.kind === "TRASPASO" || !transferish(r)) continue;
+    const cands = loose.filter((t) => !used.has(t) && signed(t) === -signed(r) && daysApart(t.dateTime, r.dateTime) <= NEAR_DAYS);
+    const t = best(cands, r.dateTime, (x) => (x.categoryId === "ing-traspaso" ? 1 : 0)); if (!t) continue;
+    used.add(t); used.add(r); paired++; remove.push(t);
+    const out = signed(r) < 0 ? r : t, inn = out === r ? t : r;
+    add[i] = { id: "trf-" + r.id, ownerId: r.ownerId, kind: "TRASPASO", amount: Math.abs(r.amount), dateTime: out.dateTime, status: "REALIZADO", accountId: out.accountId, toAccountId: inn.accountId,
+      concept: "Traspaso entre cuentas", categoryId: null, notes: `Emparejado: «${out.concept}» y «${inn.concept}»`, planned: false, estimated: false, imported: true, bank: { [out.accountId]: true, [inn.accountId]: true } };
+  }
+  return { confirmed, paired, dropped };
+}
+
+/** Normaliza un IBAN para compararlo (sin espacios, en mayúsculas). */
+export const cleanIban = (s) => (s || "").replace(/\s/g, "").toUpperCase();
+export const accountForIban = (accounts, iban) => (iban ? accounts.find((a) => !a.archived && cleanIban(a.iban) === cleanIban(iban)) : null) || null;
 const tidy = (s) => s.replace(/\s+/g, " ").replace(/\*/g, " ").trim().toLowerCase().replace(/(^|\s)\S/g, (x) => x.toUpperCase());
