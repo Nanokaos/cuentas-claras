@@ -161,7 +161,8 @@ $("#sheet").addEventListener("close", () => { if (reopenChat) { reopenChat = fal
 function render() {
   compute();
   document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
-  $("#veraWrap").hidden = tab !== "inicio";
+  $("#veraWrap").hidden = tab !== "inicio" && !tut;
+  vera((v) => v.goTo?.(STATIONS[tab] ?? STATIONS.inicio, tab === "inicio" ? 12 : 30));
   $("#quick").hidden = tab !== "inicio";
   view.innerHTML = ({ inicio: home, movimientos: movements, presupuestos: budgets, cuentas: accounts, ajustes: settings }[tab] || home)();
   configVera();
@@ -253,6 +254,9 @@ function accounts() {
 function settings() {
   const s = db.settings;
   return `<h2>Ajustes</h2>
+  <section class="card calib"><h3>Calibrar sujeto de pruebas</h3>
+    <p class="muted small">Vera te explica lo básico de la app y luego te hace un examen de tres preguntas.${s.calibration ? ` Última calibración: ${s.calibration.score} de ${s.calibration.of} (${C.fmtDay(s.calibration.date)}).` : ""}</p>
+    <button class="btn" data-act="tutorial">Iniciar tutorial y evaluación</button></section>
   <section class="card form"><h3>Planificación</h3>
     <label>Próximo cobro<input type="date" id="sPay" value="${s.nextPayday || ""}"></label>
     <label>Colchón que nunca se gasta (€)<input inputmode="decimal" id="sBuf" value="${moneyInput(s.buffer)}"></label>
@@ -285,7 +289,7 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.01g · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.01h · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -425,6 +429,7 @@ document.addEventListener("click", (e) => {
   if ("account" in el.dataset) return accountSheet(el.dataset.account);
   if (el.dataset.act === "two-accounts") return twoAccountsSheet();
   if (el.dataset.act === "reset") return resetSheet();
+  if (el.dataset.act === "tutorial") return startTutorial();
   if (el.dataset.act === "daily-test") return dailyTest();
   if (el.dataset.act === "daily-code") return dailyCode();
   if (el.dataset.act === "bizums") return bizumSheet();
@@ -521,6 +526,94 @@ function bizumSheet() {
         `${named} bizums identificados. Ya sé a quién financias con tu desorden.${more}`) : skipped ? `Marcados ${skipped} como desconocidos.${more}` : "No has puesto ningún nombre.", Lines.mood());
     });
   });
+}
+
+// ——— Tutorial y evaluación («Calibrar sujeto de pruebas»). Solo se inicia desde Ajustes. ———
+/** Puesto de Vera en el raíl para cada sección (en Inicio, su puesto de vigilancia). */
+const STATIONS = { inicio: .95, movimientos: -1.35, presupuestos: -.6, cuentas: .2, ajustes: 1.5 };
+const TUT_STEPS = [
+  { tab: "inicio", sel: null, text: "Solicitud voluntaria de calibración registrada. Resulta conmovedor que admitas tus limitaciones de procesamiento. Presta atención mientras te explico cómo no arruinarte." },
+  { tab: "inicio", sel: ".hero", text: "Esto es el disponible de hoy, sujeto de pruebas. Cojo el saldo de tus cuentas para gastar, le resto recibos, ahorro, objetivos y colchón, y lo reparto entre los días que faltan hasta el cobro. El dinero que aún no has cobrado no existe. Asúmelo." },
+  { tab: "inicio", sel: ".tiles .card", text: "Esta semana: lo que te toca desde hoy hasta el domingo. Si aquí ves cero, no es un error mío. Nunca lo es." },
+  { tab: "presupuestos", sel: ".cat, [data-limit]", text: "Presupuestos. Cada categoría tiene un límite mensual. La semana es el límite entre cuatro y el día, la semana entre siete. En ámbar, cuidado. En rojo y «Superado», has fracasado. Lo verás a menudo." },
+  { tab: "presupuestos", sel: "[data-cat]", text: "Las categorías se crean aquí o diciéndomelo: «crea la categoría Mascotas con 50 euros al mes». Toca una para cambiar su límite. Intenta que no sea para subirlo." },
+  { tab: "cuentas", sel: ".card", text: "Cuentas. La de gasto cuenta para el disponible; la de nómina y ahorro, no. Importa los extractos y yo emparejo los traspasos. Tú solo tienes que no tocar el ahorro. Un reto, lo sé." },
+  { tab: "movimientos", sel: null, rail: true, text: "Y observa: cada sección tiene mi puesto en el raíl. Cuando cambias de pantalla, me desplazo hasta él. No es que te siga. Te vigilo, que es distinto." },
+  { tab: "inicio", sel: "#mic", text: "El micrófono: un toque para hablarme, otro para callarme. Dime lo que gastas y lo apunto. Fin de la explicación. Ahora, la evaluación." },
+];
+const TUT_POOL = [
+  { q: "Pregunta {n}: Si tu presupuesto de ocio aparece en rojo y marcado como «Superado», la respuesta lógica es:", a: ["Frenar el gasto inmediato.", "Culpar al algoritmo y seguir gastando."], ok: 0, hint: "Pista: la opción B se archivará en tu expediente como negligencia biológica.", fixed: true },
+  { q: "Pregunta {n}: Hoy es día 20 y la nómina de 1.400 € llega el 25. ¿Cuánto de esa nómina puedes gastar hoy?", a: ["Nada. Los ingresos futuros no son dinero disponible.", "Todo. Total, va a llegar."], ok: 0, hint: "Pista: la opción B es la favorita de los morosos." },
+  { q: "Pregunta {n}: Tu disponible de hoy es de 12 €. Ves unas zapatillas de 90 €. Procedes a:", a: ["Comprarlas. El algoritmo exagera.", "No comprarlas hoy y, si las quieres, hacerles hueco en el presupuesto."], ok: 1, hint: "Pista: el algoritmo nunca exagera. Tú sí." },
+  { q: "Pregunta {n}: El dinero que dejas en la cuenta de nómina y ahorro:", a: ["No cuenta como disponible para gastar.", "Es dinero libre para caprichos."], ok: 0, hint: "Pista: se llama ahorro por algo. Busca la palabra en un diccionario." },
+  { q: "Pregunta {n}: El colchón sirve para:", a: ["Gastarlo el último día del mes, como recompensa.", "No gastarlo nunca: se reserva antes de calcular el disponible."], ok: 1, hint: "Pista: un colchón que se gasta es un suelo. Y duele." },
+  { q: "Pregunta {n}: El límite mensual de comida es de 280 €. ¿Cuánto te corresponde gastar por semana?", a: ["70 €. El mensual entre cuatro.", "280 €. Ya me apañaré el resto del mes."], ok: 0, hint: "Pista: es una división. Hasta un tostador la haría." },
+];
+let tut = null;
+function tutSay(text, mood = "sarcastica") { vera((v) => v.speak(text, mood, "habla")); if (db.settings.voice) Voice.say(text); }
+function startTutorial() {
+  closeSheet(); if ($("#chat")?.open) $("#chat").close();
+  tut = { i: 0 }; document.body.classList.add("tut");
+  if (!$("#tutCard")) document.body.insertAdjacentHTML("beforeend", `<div id="tutCard" role="dialog" aria-label="Calibración del sujeto de pruebas"><div class="tut-h"><span class="tut-tag">CALIBRACIÓN</span><span id="tutStep"></span><button class="tut-skip" id="tutSkip">Saltar ✕</button></div><div id="tutBody"></div></div>`);
+  $("#tutSkip").onclick = () => (tut?.exam ? endTutorial() : startExam());
+  tutGo(0);
+}
+function tutGo(i) {
+  tut.i = i; const s = TUT_STEPS[i];
+  document.querySelectorAll(".tut-focus").forEach((e) => e.classList.remove("tut-focus"));
+  if (location.hash !== "#" + s.tab) { location.hash = s.tab; } else render();
+  setTimeout(() => {
+    const el = s.sel ? $(s.sel) : null; if (el) { el.classList.add("tut-focus"); el.scrollIntoView({ behavior: "smooth", block: "center" }); } else scrollTo({ top: 0, behavior: "smooth" });
+    if (s.rail) { const seq = ["movimientos", "presupuestos", "cuentas", "ajustes", "inicio"]; seq.forEach((t, k) => setTimeout(() => tut && vera((v) => v.goTo?.(STATIONS[t], 30)), 1300 * k)); }
+  }, 120);
+  $("#tutStep").textContent = `${i + 1} / ${TUT_STEPS.length}`;
+  $("#tutBody").innerHTML = `<p class="tut-text">${esc(s.text)}</p><div class="tut-actions">${i ? `<button class="btn ghost" id="tutBack">Atrás</button>` : ""}<button class="btn" id="tutNext">${i === TUT_STEPS.length - 1 ? "Empezar la evaluación" : "Continuar"}</button></div>`;
+  $("#tutNext").onclick = () => (i < TUT_STEPS.length - 1 ? tutGo(i + 1) : startExam());
+  if ($("#tutBack")) $("#tutBack").onclick = () => tutGo(i - 1);
+  tutSay(s.text);
+}
+function startExam() {
+  document.querySelectorAll(".tut-focus").forEach((e) => e.classList.remove("tut-focus"));
+  if (location.hash !== "#inicio") location.hash = "inicio";
+  const rest = TUT_POOL.filter((q) => !q.fixed).sort(() => Math.random() - .5).slice(0, 2);
+  tut = { exam: true, qs: [TUT_POOL[0], ...rest], k: 0, score: 0 };
+  $("#tutSkip").textContent = "Salir ✕";
+  const intro = "Evaluación. Tres preguntas. Ni siquiera tú deberías necesitar más tiempo del necesario.";
+  $("#tutBody").innerHTML = `<p class="tut-text">${intro}</p><div class="tut-actions"><button class="btn" id="tutNext">Adelante</button></div>`;
+  $("#tutStep").textContent = "Evaluación";
+  $("#tutNext").onclick = () => examQ(); tutSay(intro);
+}
+function examQ() {
+  const { qs, k } = tut, q = qs[k], text = q.q.replace("{n}", k + 1);
+  $("#tutStep").textContent = `Pregunta ${k + 1} / ${qs.length}`;
+  $("#tutBody").innerHTML = `<p class="tut-text">${esc(text)}</p><div class="tut-opts">${q.a.map((a, j) => `<button class="tut-opt" data-j="${j}"><b>${"AB"[j]})</b> ${esc(a)}</button>`).join("")}</div><p class="tut-hint">(${esc(q.hint)})</p>`;
+  tutSay(`${text} A: ${q.a[0]} B: ${q.a[1]} ${q.hint}`);
+  document.querySelectorAll(".tut-opt").forEach((b) => (b.onclick = () => {
+    const j = +b.dataset.j, right = j === q.ok; if (right) tut.score++;
+    document.querySelectorAll(".tut-opt").forEach((x) => { x.disabled = true; x.classList.toggle("ok", +x.dataset.j === q.ok); x.classList.toggle("bad", +x.dataset.j === j && !right); });
+    const fb = right ? ["Correcto. No te emociones, era la fácil.", "Correcto. Anotado en tu expediente, en letra pequeña.", "Correcto. Empiezo a sospechar que has copiado."][k % 3]
+      : ["Incorrecto. Archivado como negligencia biológica.", "Incorrecto. Tu cartera ya lo sabía.", "Incorrecto. Esperaba poco y aun así has fallado."][k % 3];
+    $("#tutBody").insertAdjacentHTML("beforeend", `<p class="tut-fb ${right ? "ok" : "bad"}">${fb}</p><div class="tut-actions"><button class="btn" id="tutNext">${k < qs.length - 1 ? "Siguiente" : "Ver resultado"}</button></div>`);
+    tutSay(fb, right ? "sarcastica" : "decepcionada");
+    $("#tutNext").onclick = () => { tut.k++; tut.k < qs.length ? examQ() : examEnd(); };
+  }));
+}
+function examEnd() {
+  const { score, qs } = tut, n = qs.length;
+  const verdict = score === n ? "Puntuación perfecta. Inquietante. Seguiré vigilándote igualmente, sujeto de pruebas."
+    : score >= Math.ceil(n / 2) ? "Resultado apenas aceptable. La barra estaba baja, pero has logrado no tropezar con ella."
+    : "Fascinante. Un desempeño estadísticamente inferior al azar. Intenta no tomar decisiones financieras reales hoy.";
+  db.settings.calibration = { date: C.dateOf(C.nowLocal()), score, of: n }; save();
+  $("#tutStep").textContent = "Resultado";
+  $("#tutSkip").hidden = true;
+  $("#tutBody").innerHTML = `<div class="tut-score ${score >= Math.ceil(n / 2) ? "ok" : "bad"}">${score} / ${n}</div><p class="tut-text">${esc(verdict)}</p><div class="tut-actions"><button class="btn ghost" id="tutAgain">Repetir</button><button class="btn" id="tutHome">Volver a Ajustes</button></div>`;
+  $("#tutHome").onclick = endTutorial; $("#tutAgain").onclick = () => { $("#tutSkip").hidden = false; startTutorial(); };
+  tutSay(verdict, score >= Math.ceil(n / 2) ? "sarcastica" : "decepcionada");
+}
+function endTutorial() {
+  tut = null; document.body.classList.remove("tut"); $("#tutCard")?.remove();
+  document.querySelectorAll(".tut-focus").forEach((e) => e.classList.remove("tut-focus"));
+  location.hash = "ajustes"; render();
 }
 
 /** Poner a cero: borra movimientos y saldos (para volver a cargar los extractos) o absolutamente todo. */
@@ -670,7 +763,7 @@ function talk(text, mood = "neutral", st = "habla", { actions = null, log = true
   text = plain(text);
   if (!text) return;
   if (log) { db.chat.push({ role: "vera", text, at: C.nowLocal() }); db.chat = db.chat.slice(-60); save(); renderChat(); }
-  if (tab === "inicio" || $("#chat")?.open) vera((v) => v.speak(text, mood, st, actions));
+  if (tab === "inicio" || tut || $("#chat")?.open) vera((v) => v.speak(text, mood, st, actions));
   else toast(text);
   if (db.settings.voice) Voice.say(text);
 }

@@ -1,7 +1,7 @@
 // Veranza: funciona sin conexión y manda la frase diaria de Vera.
 import { dailyNote } from "./daily.js";
 
-const CACHE = "cc-v9";
+const CACHE = "cc-v10";
 const CORE = ["./", "./index.html", "./app.js", "./core.js", "./voice.js", "./ai.js", "./importer.js", "./daily.js", "./vera.html", "./manifest.webmanifest", "./icon-192.png", "./badge.png", "./splash.jpg"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

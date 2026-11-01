@@ -151,6 +151,25 @@ dialog::backdrop { background: rgba(5, 3, 10, .7); }
 #listenBar { width: min(92vw, 420px); }
 #listenBar small { color: #ffb3c3; font-size: 11px; flex: none; }
 body.listening #veraWrap::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 2px rgba(255,45,85,.75), inset 0 0 70px rgba(255,45,85,.4); animation: pulseDot 1.4s ease-in-out infinite; }
+
+body.tut #veraWrap { display: block !important; height: min(34vh, 260px); }
+body.tut main { padding-bottom: 300px; }
+.tut-focus { position: relative; z-index: 5; outline: 2px solid #ff4fd8 !important; outline-offset: 3px; box-shadow: 0 0 0 6px rgba(255,79,216,.18), 0 0 34px rgba(255,79,216,.55) !important; border-radius: 16px; animation: tutGlow 1.6s ease-in-out infinite; }
+@keyframes tutGlow { 50% { outline-color: rgba(255,79,216,.35); } }
+#tutCard { position: fixed; left: 10px; right: 10px; bottom: calc(74px + env(safe-area-inset-bottom)); z-index: 70; max-width: 560px; margin: 0 auto; padding: 14px 16px 16px; border-radius: 18px; background: rgba(16,8,22,.96); border: 1px solid rgba(255,79,216,.55); box-shadow: 0 10px 40px rgba(0,0,0,.6), 0 0 30px rgba(255,79,216,.25); backdrop-filter: blur(10px); }
+.tut-h { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.tut-tag { color: #ff4fd8; letter-spacing: .2em; font-weight: 700; }
+#tutStep { flex: 1; }
+.tut-skip { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25); color: #fff; border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: 13px; cursor: pointer; }
+.tut-text { margin: 0 0 12px; line-height: 1.45; font-size: 15px; }
+.tut-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.tut-opts { display: grid; gap: 8px; }
+.tut-opt { text-align: left; padding: 12px 14px; border-radius: 12px; background: var(--raise); border: 1px solid var(--line); color: var(--text); font-size: 14px; cursor: pointer; }
+.tut-opt.ok { border-color: #3ddc97; background: rgba(61,220,151,.12); } .tut-opt.bad { border-color: #ff2d55; background: rgba(255,45,85,.12); }
+.tut-hint { font-size: 12px; color: var(--muted); font-style: italic; margin: 10px 0; }
+.tut-fb { font-weight: 600; margin: 4px 0 12px; } .tut-fb.ok { color: #3ddc97; } .tut-fb.bad { color: #ff6b8a; }
+.tut-score { font-size: 44px; font-weight: 300; letter-spacing: .08em; margin: 2px 0 6px; } .tut-score.ok { color: #3ddc97; } .tut-score.bad { color: #ff6b8a; }
+.card.calib { border-color: rgba(255,79,216,.45); }
 </style>
 </head>
 <body>

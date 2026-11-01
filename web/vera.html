@@ -714,6 +714,8 @@ window.vera = {
   gesture(g) { gesture(g, g === "shake" ? 1.3 : 1.1); }, wander() { wander(true); },
   setSarcasm(n) { sarcasm = clamp(n | 0, 0, 4); }, setRemarks(list) { remarks = Array.isArray(list) ? list : []; },
   setReduceMotion(on) { RM = !!on; },
+  /** Va a un punto del raíl y se queda ahí como puesto (deja de pasear un rato). */
+  goTo(x, hold = 20) { const t = clamp(+x || 0, G.minX, G.maxX); G.home = t; P.ttx = t; nextWander = clock + hold; },
   setQuality(q) { const low = q === "baja"; renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio || 1, 2)); bloom.enabled = !low; key.castShadow = !low; dust.visible = !low; resize(); },
 };
 
