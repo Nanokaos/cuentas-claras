@@ -74,7 +74,9 @@ const vera = (fn) => { if (veraReady && frame.contentWindow?.vera) fn(frame.cont
 addEventListener("message", (e) => {
   const m = e.data?.vera; if (!m) return;
   if (m === "ready") { veraReady = true; configVera(); queue.splice(0).forEach((fn) => fn(frame.contentWindow.vera)); talk(Lines.hello(), Lines.mood(), "habla", { log: false }); }
-  if (m === "tap") openChat();
+  if (m === "said") { if (db.settings.voice) Voice.say(e.data.text); return; }
+  if (m === "poke") Voice.unlockVoice();
+  if (m === "tap") { Voice.unlockVoice(); openChat(); }
   if (m === "action") onVeraAction(e.data.id);
 });
 function configVera() { vera((v) => { v.setSarcasm(db.settings.sarcasm); v.setReduceMotion(db.settings.reduceMotion); v.setQuality(db.settings.quality); v.setRemarks(Lines.remarks()); }); }
@@ -265,7 +267,7 @@ function settings() {
     <label class="btn file">Importar extracto del banco (PDF, Excel o CSV)<input type="file" class="bankFile" accept=".pdf,.xlsx,.xls,.ods,.csv,application/pdf"></label>
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Cuentas Claras · versión 2026.11.01d · coste 0 €.</p>`;
+  <p class="muted small">Cuentas Claras · versión 2026.11.01e · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -405,7 +407,7 @@ document.addEventListener("change", (e) => {
   if (id === "sVoice") { db.settings.voice = e.target.checked; save(); if (!e.target.checked) Voice.stopVoice(); }
   if (id === "sRm") { db.settings.reduceMotion = e.target.checked; save(); configVera(); }
   if (id === "sLow") { db.settings.quality = e.target.checked ? "baja" : "alta"; save(); configVera(); }
-  if (id === "sDemo") { demo = e.target.checked; localStorage.setItem("cc.mode", demo ? "demo" : "real"); db = load(); materializeAll(); save(); render();
+  if (id === "sDemo") { demo = e.target.checked; localStorage.setItem("cc.mode", demo ? "demo" : "real"); db = load(); fixCashWithdrawals(); materializeAll(); save(); render();
 if (db.chat.length) renderChatBadge(); toast(demo ? "Modo demostración." : "Ahora ves tus datos reales."); }
   if (e.target.classList.contains("bankFile")) { const f = e.target.files[0]; e.target.value = ""; if (f) importStatement(f); return; }
   if (id === "sImport") { const file = e.target.files[0]; if (!file) return; file.text().then((txt) => { const d = JSON.parse(txt); if (!Array.isArray(d.transactions) || !Array.isArray(d.accounts)) throw new Error("formato"); if (!confirm("Esto sustituye los datos actuales de este modo por los de la copia. ¿Continuar?")) return; db = d; save(); render(); toast("Copia restaurada."); }).catch(() => toast("Ese archivo no es una copia válida de Cuentas Claras.")); }
@@ -445,6 +447,14 @@ function csv() {
   const rows = [["Fecha", "Hora", "Tipo", "Estado", "Importe", "Concepto", "Categoría", "Cuenta", "Cuenta destino", "Notas"]];
   for (const t of S.live.sort((a, b) => (a.dateTime < b.dateTime ? -1 : 1))) rows.push([t.dateTime.slice(0, 10), t.dateTime.slice(11, 16), t.kind, C.effectiveStatus(t, S.now), (t.amount / 100).toFixed(2).replace(".", ","), t.concept, catName(t.categoryId), accName(t.accountId), accName(t.toAccountId), t.notes]);
   return "﻿" + rows.map((r) => r.map(q).join(";")).join("\r\n");
+}
+
+/** Versiones anteriores pasaban los reintegros del cajero a la cuenta de efectivo e inflaban el saldo. */
+function fixCashWithdrawals() {
+  const bad = db.transactions.filter((t) => t.imported && !t.deleted && t.kind === "TRASPASO" && db.accounts.find((a) => a.id === t.toAccountId)?.type === "EFECTIVO");
+  if (!bad.length) return;
+  if (!db.categories.some((c) => c.id === "cat-efectivo")) db.categories.push({ id: "cat-efectivo", name: "Efectivo retirado", custom: true });
+  bad.forEach((t) => { t.kind = "GASTO"; t.toAccountId = null; t.categoryId = "cat-efectivo"; });
 }
 
 // ======================= Arranque =======================

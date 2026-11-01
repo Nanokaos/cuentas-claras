@@ -43,7 +43,7 @@ test("clasifica comercios y trata devoluciones, efectivo y traspasos", () => {
   assert.equal(I.classify("GASEXPRESS TORRE}", -1500), "transporte");
   const p = I.plan(db(), I.parseStatementText(TEXT), "cc", "yo", "2026-11-01T09:00");
   const kinds = Object.fromEntries(p.add.map((t) => [t.concept, t.kind]));
-  assert.equal(kinds["Reint.cajero"], "TRASPASO");
+  assert.equal(kinds["Reint.cajero"], "GASTO");
   assert.equal(kinds["Traspaso Propio"], "AJUSTE");
   assert.equal(p.add.find((t) => t.kind === "DEVOLUCION").categoryId, "cat-telefonia");
 });

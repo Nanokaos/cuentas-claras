@@ -107,7 +107,11 @@ function sleep() { cancelSeq(); hideBubble(); setState("reposo"); setMood("dormi
 
 // ================= Habla =================
 let speech = null;
+let fromApp = false;
 function speak(text, opts = {}) {
+  // Lo que Vera dice por su cuenta (al tocarla, al despertar, comentarios) se avisa a la app para que lo diga en voz alta.
+  if (!fromApp) parent.postMessage({ vera: "said", text }, "*");
+  fromApp = false;
   setMood(opts.mood || "neutral"); setState(opts.state || "habla"); moveAside();
   speech = { text, shown: 0, acc: 0, done: false, opts, holdUntil: 0 };
   bubbleText.textContent = ""; bubbleText.classList.add("cursor"); bubbleActions.innerHTML = ""; bubble.classList.add("show"); live.textContent = text;
@@ -700,7 +704,7 @@ function bubbleLayout() {
 
 // ================= API para la app =================
 window.vera = {
-  speak(text, mood = "neutral", st = "habla", actions = null) { cancelSeq(); interact(); speak(text, { mood, state: st, actions }); },
+  speak(text, mood = "neutral", st = "habla", actions = null) { cancelSeq(); interact(); fromApp = true; speak(text, { mood, state: st, actions }); },
   show(text) { showRaw(text); }, hide() { hideBubble(); },
   setState(s) { cancelSeq(); setState(s); }, setMood(md) { if (MOODS[md]) setMood(md); },
   gesture(g) { gesture(g, g === "shake" ? 1.3 : 1.1); }, wander() { wander(true); },

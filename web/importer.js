@@ -190,7 +190,6 @@ export function plan(db, st, accountId, ownerId, now) {
   const inRange = (t) => C.dateOf(t.dateTime) >= from && C.dateOf(t.dateTime) <= to;
   const touches = (t) => t.accountId === accountId || t.toAccountId === accountId;
   const remove = db.transactions.filter((t) => !t.deleted && touches(t) && inRange(t));
-  const cashId = db.accounts.find((a) => a.type === "EFECTIVO" && !a.archived)?.id;
   // Las filas del mismo día se ordenan de la más antigua a la más reciente para darles hora correlativa.
   const chrono = st.rows[0].date >= st.rows.at(-1).date ? [...st.rows].reverse() : [...st.rows];
   const perDay = {};
@@ -200,7 +199,8 @@ export function plan(db, st, accountId, ownerId, now) {
     const cat = classify(r.concept, r.amount);
     const base = { id: "imp-" + C.normalize(`${r.date} ${r.concept} ${r.amount} ${r.saldo ?? ""} ${n}`).replace(/ /g, "-"), ownerId, amount: Math.abs(r.amount),
       dateTime: `${r.date}T${time}`, status: "REALIZADO", concept: tidy(r.concept), notes: "Importado del extracto", planned: false, estimated: false, imported: true };
-    if (cat === "cat-efectivo" && cashId) return { ...base, kind: "TRASPASO", accountId, toAccountId: cashId, categoryId: null };
+    // El efectivo sacado del cajero cuenta como gastado: casi nunca se apunta después en qué se fue.
+    if (cat === "cat-efectivo" && r.amount < 0) return { ...base, kind: "GASTO", accountId, categoryId: "cat-efectivo" };
     if (cat === "ing-traspaso" || /\btraspaso\b/.test(C.normalize(r.concept))) return { ...base, kind: "AJUSTE", amount: r.amount, accountId, categoryId: "ing-traspaso" };
     const isIncomeCat = cat.startsWith("ing-");
     return { ...base, kind: r.amount < 0 ? "GASTO" : isIncomeCat ? "INGRESO" : "DEVOLUCION", accountId, categoryId: cat };
