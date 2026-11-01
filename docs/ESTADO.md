@@ -65,6 +65,8 @@ y un asistente con personalidad fría y sarcástica que explica y propone pero n
 
 ## Registro
 
+- 2026-11-01. Importación de extractos (PDF con texto, PDF escaneado con OCR Tesseract.js en el móvil, Excel, CSV) con comprobación por saldo; sustituye lo anotado en esa cuenta dentro del periodo; clasifica por comercio, crea categorías, propone presupuestos y ajusta saldo. Probado con un extracto real de 666 movimientos (96 % de saldos cuadran; no se ha subido al repositorio). Vera: control total (29 herramientas) con confirmación y «deshacer». Presupuesto semanal (mensual ÷ 4) y diario (semana ÷ 7). Nivel de sarcasmo «Cruel». Piel gris sucia y cables de datos enchufados a la esfera. Guía de órdenes en `docs/COMANDOS.md`.
+
 - 2026-10-31. Vera habla en voz alta (voz del sistema, tono robótico), dictado con mensajes de error claros, chat con Groq que responde sobre tus finanzas y maneja la app mediante herramientas (registrar, editar, borrar, confirmar previstos, límites, categorías, planificación, cuentas, búsqueda, navegación); todo cambio requiere confirmación. Sin clave: órdenes sencillas locales. Categorías propias. Intermediario opcional en `proxy/worker.js`. Corregido desbordamiento horizontal en móvil.
 
 - 2026-10-31. **Cambio a app web (PWA)** en `web/`, publicada gratis con GitHub Pages. Motor portado a JavaScript (`web/core.js`) con los mismos casos de prueba. Datos en el propio dispositivo (localStorage) con copia de seguridad JSON y exportación CSV. Dictado con el reconocimiento de voz del navegador. Vera: esfera de metal gastado en 3D (Three.js). La app Android queda aparcada como referencia.

@@ -69,6 +69,8 @@ details { margin-top: 10px; } summary { color: var(--accent2); font-size: 13.5px
 .line { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; padding: 3px 0; font-variant-numeric: tabular-nums; }
 .line.RESULTADO { font-weight: 600; border-top: 1px solid var(--line); padding-top: 6px; } .line.NOTA { color: var(--muted); }
 .cat { margin-bottom: 12px; } .cat:last-child { margin-bottom: 0; }
+.sub-b { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; } .sub-b b { color: var(--text); font-weight: 500; } .sub-b b.neg { color: var(--bad); }
+.link.file input, .btn.file input { display: none; }
 .cat-h { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-variant-numeric: tabular-nums; }
 .bar { height: 6px; border-radius: 3px; background: var(--raise); overflow: hidden; margin: 5px 0 3px; }
 .bar i { display: block; height: 100%; background: var(--ok); border-radius: 3px; } .bar i.w { background: var(--warn); } .bar i.bad { background: var(--bad); }
@@ -133,6 +135,7 @@ dialog::backdrop { background: rgba(5, 3, 10, .7); }
     <button type="button" class="round" id="chatMic" aria-label="Dictar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
     <button class="round send" aria-label="Enviar">➤</button></form>
 </dialog>
+<input type="file" id="bankPick" class="bankFile" accept=".pdf,.xlsx,.xls,.ods,.csv,application/pdf" hidden>
 <dialog id="sheet"><div id="sheetBody"></div></dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 <script type="module" src="app.js"></script>

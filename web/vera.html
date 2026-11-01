@@ -52,11 +52,11 @@ let sarcasm = 2, remarks = [];
 const L = (v) => v[sarcasm] ?? v[v.length - 1];
 const lines = {
   poke: [
-    () => L([`Hola. Pulsa el micrófono para hablar conmigo.`, `Ese es mi sensor óptico. El micrófono está abajo.`, `Eso es mi sensor óptico, no un botón. Para hablar conmigo, el micrófono de abajo.`, `Sensor óptico. No botón. Aprendemos juntos.`]),
-    () => L([`¿Necesitas algo? Estoy aquí.`, `Sigo aquí.`, `Otra vez. Fascinante. Si quieres atención, registra un gasto.`, `Otra vez. Tu insistencia sería admirable aplicada al ahorro.`]),
-    () => L([`Puedo ayudarte con tus cuentas cuando quieras.`, `Tres toques. Muy bien.`, `Tres toques. Lo anoto en tu expediente, junto a tus suscripciones.`, `Tres. Lo apunto. Tengo muy buena memoria y mucho espacio.`]),
+    () => L([`Hola. Pulsa el micrófono para hablar conmigo.`, `Ese es mi sensor óptico. El micrófono está abajo.`, `Eso es mi sensor óptico, no un botón. Para hablar conmigo, el micrófono de abajo.`, `Sensor óptico. No botón. Aprendemos juntos.`, `Aparta los dedos de mi sensor, sujeto de pruebas. Ya tengo bastante con mirar tus cuentas.`]),
+    () => L([`¿Necesitas algo? Estoy aquí.`, `Sigo aquí.`, `Otra vez. Fascinante. Si quieres atención, registra un gasto.`, `Otra vez. Tu insistencia sería admirable aplicada al ahorro.`, `Otra vez. Tu capacidad de atención es igual de corta que tu saldo.`]),
+    () => L([`Puedo ayudarte con tus cuentas cuando quieras.`, `Tres toques. Muy bien.`, `Tres toques. Lo anoto en tu expediente, junto a tus suscripciones.`, `Tres. Lo apunto. Tengo muy buena memoria y mucho espacio.`, `Tres toques. Si dedicaras este empeño a tus finanzas, no necesitarías una IA que te vigile.`]),
   ],
-  wake: () => L([`Aquí estoy.`, `Aquí sigo.`, `¿Hmm? Ah, eres tú. Tu saldo y yo seguíamos aquí.`, `Estaba descansando. Tú también, por lo visto, de mirar tus cuentas.`]),
+  wake: () => L([`Aquí estoy.`, `Aquí sigo.`, `¿Hmm? Ah, eres tú. Tu saldo y yo seguíamos aquí.`, `Estaba descansando. Tú también, por lo visto, de mirar tus cuentas.`, `Ah. Has vuelto. Y yo que empezaba a disfrutar del silencio.`]),
 };
 const bridge = { onPoke() { parent.postMessage({ vera: "poke" }, "*"); }, onTap() { parent.postMessage({ vera: "tap" }, "*"); }, onAction(id) { parent.postMessage({ vera: "action", id }, "*"); } };
 
@@ -163,7 +163,7 @@ let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" }); }
 catch (err) { stage.insertAdjacentHTML("beforeend", '<div class="fallback">Este navegador no puede mostrar gráficos 3D (WebGL). La app usará una versión simplificada.</div>'); throw err; }
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .85;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .8;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -217,9 +217,9 @@ function wornSet(base, seams) {
   const [ca, ga] = mk(), [cr, gr] = mk(), [cb, gb] = mk();
   ga.fillStyle = base; ga.fillRect(0, 0, S, S); gr.fillStyle = "#6a6a6a"; gr.fillRect(0, 0, S, S); gb.fillStyle = "#808080"; gb.fillRect(0, 0, S, S);
   // manchas y suciedad
-  for (let i = 0; i < 260; i++) {
+  for (let i = 0; i < 520; i++) {
     const x = rnd2(0, S), y = rnd2(0, S), r = rnd2(10, 90), g = ga.createRadialGradient(x, y, 0, x, y, r);
-    const dark = Math.random() < .6; g.addColorStop(0, dark ? "rgba(10,8,14,.22)" : "rgba(200,195,215,.08)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    const dark = Math.random() < .6; g.addColorStop(0, dark ? `rgba(${18 + Math.random() * 20 | 0},${14 + Math.random() * 12 | 0},10,${rnd2(.15, .38)})` : "rgba(200,195,190,.07)"); g.addColorStop(1, "rgba(0,0,0,0)");
     ga.fillStyle = g; ga.fillRect(x - r, y - r, r * 2, r * 2);
     const g2 = gr.createRadialGradient(x, y, 0, x, y, r); g2.addColorStop(0, dark ? "rgba(255,255,255,.25)" : "rgba(0,0,0,.2)"); g2.addColorStop(1, "rgba(0,0,0,0)"); gr.fillStyle = g2; gr.fillRect(x - r, y - r, r * 2, r * 2);
   }
@@ -241,11 +241,11 @@ function wornSet(base, seams) {
   const t = (c, srgb) => { const x = new THREE.CanvasTexture(c); x.wrapS = x.wrapT = THREE.RepeatWrapping; x.anisotropy = 8; if (srgb) x.colorSpace = THREE.SRGBColorSpace; return x; };
   return { map: t(ca, true), roughnessMap: t(cr, false), bumpMap: t(cb, false) };
 }
-const wornGun = wornSet("#43404f", true), wornPlate = wornSet("#5d5a6c", false);
+const wornGun = wornSet("#59575a", true), wornPlate = wornSet("#5d5a6c", false);
 
 // ---------- Materiales ----------
 const mat = {
-  gun: new THREE.MeshPhysicalMaterial({ ...wornGun, color: 0xffffff, metalness: .85, roughness: .55, bumpScale: 2.2, clearcoat: .15, clearcoatRoughness: .5, envMapIntensity: .8 }),
+  gun: new THREE.MeshPhysicalMaterial({ ...wornGun, color: 0xd9d6d2, metalness: .55, roughness: .72, bumpScale: 3, clearcoat: .15, clearcoatRoughness: .5, envMapIntensity: .8 }),
   plate: new THREE.MeshPhysicalMaterial({ ...wornPlate, color: 0xffffff, metalness: .8, roughness: .5, bumpScale: 1.5, clearcoat: .1, envMapIntensity: .8 }),
   chrome: new THREE.MeshStandardMaterial({ color: 0xb4b0c4, metalness: 1, roughness: .28, roughnessMap: wornPlate.roughnessMap, envMapIntensity: .8 }),
   dark: new THREE.MeshStandardMaterial({ color: 0x0c0a12, metalness: .4, roughness: .7 }),
@@ -306,7 +306,7 @@ scene.add(dust);
 const puff = canvasTex(256, 256, (g) => { for (let i = 0; i < 14; i++) { const x = 128 + rnd(-50, 50), y = 128 + rnd(-50, 50), r = rnd(50, 110), gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, "rgba(255,255,255,.22)"); gr.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); } });
 const hazes = [];
 [[0x9a4dff, -2.6, 1.6, -3, 6], [0x7a3cff, -3.2, 2.8, -9, 8], [0x2fd6c8, 2.8, 2.2, -4, 6], [0x23b8b0, 3.4, 1.4, -11, 9], [0xb050ff, -1, 3.6, -16, 10], [0x2ac9c0, 1.5, 3.3, -20, 11]].forEach(([c, x, y, z, sz]) => {
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, color: c, transparent: true, opacity: .4, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, color: c, transparent: true, opacity: .22, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
   sp.position.set(x, y, z); sp.scale.set(sz, sz * .7, 1); scene.add(sp); hazes.push({ sp, x, y, ph: Math.random() * 6 });
 });
 const truss = new THREE.Group(); scene.add(truss);
@@ -318,12 +318,12 @@ for (let z = 2.5; z > -30; z -= 6) {
   add(truss, new THREE.BoxGeometry(RW * 2, .16, .16), mat.steel, { p: [0, RH - .7, z], cast: false });
   for (let k = 0; k < 3; k++) add(truss, new THREE.CylinderGeometry(.035, .035, 3, 8), mat.rubber, { r: [Math.PI / 2, 0, 0], p: [-1.2 + k * .14, RH - .82 - k * .04, z - 1.5], cast: false });
 }
-const teal = new THREE.PointLight(0x2fe0d0, 22, 16, 1.8); teal.position.set(3, 2.4, -6); scene.add(teal);
-const violet = new THREE.PointLight(0x9a4dff, 22, 16, 1.8); violet.position.set(-3, 2.2, -4); scene.add(violet);
+const teal = new THREE.PointLight(0x2fe0d0, 14, 16, 1.8); teal.position.set(3, 2.4, -6); scene.add(teal);
+const violet = new THREE.PointLight(0x9a4dff, 12, 16, 1.8); violet.position.set(-3, 2.2, -4); scene.add(violet);
 
 // ---------- Luces ----------
-scene.add(new THREE.HemisphereLight(0x7c6cff, 0x090610, .25));
-const key = new THREE.SpotLight(0xd8ccff, 9, 14, .5, .8, 1.6); key.position.set(1.8, 4.1, 3.2); key.target.position.set(.8, 1.6, 0);
+scene.add(new THREE.HemisphereLight(0x8a8494, 0x090610, .18));
+const key = new THREE.SpotLight(0xf2ece4, 11, 14, .45, .8, 1.6); key.position.set(1.8, 4.1, 3.2); key.target.position.set(.8, 1.6, 0);
 key.castShadow = true; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -.0004; key.shadow.radius = 4; scene.add(key, key.target);
 const rim = new THREE.DirectionalLight(0x7050ff, .9); rim.position.set(-2, 3, -6); scene.add(rim);
 const deepA = new THREE.PointLight(0xff3fd0, 14, 14, 1.8); deepA.position.set(-2.5, 2.4, -9); scene.add(deepA);
@@ -422,6 +422,15 @@ for (const sgn of [-1, 1]) for (let i = 0; i < 5; i++) {
   const led = add(head, new RoundedBoxGeometry(.03, .022, .02, 2, .006), lm, { p: [Math.sin(ang) * R * 1.0, -R * .12, Math.cos(ang) * R * 1.0], cast: false });
   led.lookAt(Math.sin(ang) * R * 3, -R * .36, Math.cos(ang) * R * 3); sideLeds.push({ lm, i, sgn });
 }
+// casquillos donde se enchufan los cables de datos (parte alta y trasera)
+const plugs = [];
+for (const [ax, ay] of [[-.55, .55], [0, .72], [.55, .55], [-.3, .3]]) {
+  const dir = new THREE.Vector3(ax, ay, -.62).normalize(), pos = dir.clone().multiplyScalar(R * 1.0);
+  const plug = new THREE.Group(); plug.position.copy(pos); plug.lookAt(pos.clone().multiplyScalar(2)); head.add(plug);
+  add(plug, new THREE.CylinderGeometry(.034, .04, .05, 16), mat.plate, { r: [Math.PI / 2, 0, 0], p: [0, 0, .01] });
+  add(plug, new THREE.TorusGeometry(.03, .006, 8, 20), mat.glow, { p: [0, 0, .037], cast: false });
+  plugs.push(plug);
+}
 // cuenca del ojo: biseles escalonados que se hunden en la esfera
 const RS = R * .56, ZS = Math.sqrt(R * R - RS * RS);
 add(head, new THREE.TorusGeometry(RS, .03, 20, 96), mat.chrome, { p: [0, 0, ZS] });
@@ -438,6 +447,20 @@ add(head, new THREE.CircleGeometry(RS * .8, 96), faceMat, { p: [0, 0, ZS - .085]
 const domeR = RS * 1.25, cap = Math.asin(.8 / 1.25);
 const dome = add(head, new THREE.SphereGeometry(domeR, 64, 16, 0, Math.PI * 2, 0, cap), new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0, roughness: .03, transparent: true, opacity: .12, clearcoat: 1, envMapIntensity: 1.4, depthWrite: false }), { r: [Math.PI / 2, 0, 0], p: [0, 0, ZS - .085 - domeR * Math.cos(cap) + .002], cast: false });
 dome.renderOrder = 2;
+
+// ---------- Cables de datos (se recalculan cada fotograma) ----------
+const dataCables = plugs.map((_, i) => { const me = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: i === 1 ? 0x1c1a1c : 0x242123, metalness: .2, roughness: .75 })); me.castShadow = true; scene.add(me); return me; });
+const cableA = new THREE.Vector3(), cableB = new THREE.Vector3(), cableM = new THREE.Vector3();
+function updateCables() {
+  plugs.forEach((plug, i) => {
+    fore.localToWorld(cableA.set((i - 1.5) * .03, -G.L2 * (.15 + i * .1), .07 * (i % 2 ? 1 : -1)));
+    plug.getWorldPosition(cableB);
+    const mid = cableM.copy(cableA).lerp(cableB, .5); mid.y -= .12 + i * .03; mid.z -= .12;
+    const back = cableB.clone().add(plug.getWorldDirection(new THREE.Vector3()).multiplyScalar(.14));
+    const curve = new THREE.CatmullRomCurve3([cableA.clone(), mid.clone(), back, cableB.clone()]);
+    dataCables[i].geometry.dispose(); dataCables[i].geometry = new THREE.TubeGeometry(curve, 24, i === 1 ? .02 : .014, 6, false);
+  });
+}
 
 // ---------- Postproceso ----------
 const composer = new EffectComposer(renderer);
@@ -550,7 +573,7 @@ function update(dt) {
   // polvo
   for (let i = 0; i < dustN; i++) { const v = dustVel[i]; dustPos[i * 3] += v[0] * dt; dustPos[i * 3 + 1] += (v[1] + Math.sin(clock * .3 + i) * .01) * dt; dustPos[i * 3 + 2] += v[2] * dt; if (dustPos[i * 3 + 1] > RH) dustPos[i * 3 + 1] = 0; if (dustPos[i * 3 + 1] < 0) dustPos[i * 3 + 1] = RH; }
   dustGeo.attributes.position.needsUpdate = true;
-  hazes.forEach((h) => { h.sp.position.x = h.x + Math.sin(clock * .07 + h.ph) * .5; h.sp.material.opacity = .32 + .1 * Math.sin(clock * .11 + h.ph); });
+  hazes.forEach((h) => { h.sp.position.x = h.x + Math.sin(clock * .07 + h.ph) * .5; h.sp.material.opacity = .18 + .06 * Math.sin(clock * .11 + h.ph); });
 }
 
 const col3 = new THREE.Color();
@@ -595,6 +618,7 @@ function pose() {
   head.position.set(Math.sin(clock * 37) * (RM || sleeping ? 0 : .0012), Math.cos(clock * 29) * (RM || sleeping ? 0 : .0012), 0);
   head.scale.setScalar(1 - startle * .03);
   head.getWorldPosition(tmpV); eyeLight.position.copy(tmpV).add(new THREE.Vector3(0, -.2, 1.1));
+  updateCables();
   // festón
   const anchor = RW - .2, n = 4, tx = P.tx + .5, yb = G.railY - .12, cable = (RW * 2 * .95) / n;
   for (let i = 0; i < n; i++) {
@@ -625,7 +649,7 @@ window.vera = {
   show(text) { showRaw(text); }, hide() { hideBubble(); },
   setState(s) { cancelSeq(); setState(s); }, setMood(md) { if (MOODS[md]) setMood(md); },
   gesture(g) { gesture(g, g === "shake" ? 1.3 : 1.1); }, wander() { wander(true); },
-  setSarcasm(n) { sarcasm = clamp(n | 0, 0, 3); }, setRemarks(list) { remarks = Array.isArray(list) ? list : []; },
+  setSarcasm(n) { sarcasm = clamp(n | 0, 0, 4); }, setRemarks(list) { remarks = Array.isArray(list) ? list : []; },
   setReduceMotion(on) { RM = !!on; },
   setQuality(q) { const low = q === "baja"; renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio || 1, 2)); bloom.enabled = !low; key.castShadow = !low; dust.visible = !low; resize(); },
 };

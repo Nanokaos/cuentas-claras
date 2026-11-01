@@ -2,6 +2,7 @@
 import * as C from "./core.js";
 import * as Voice from "./voice.js";
 import * as AI from "./ai.js";
+import * as Importer from "./importer.js";
 
 const ME = "yo";
 const $ = (s, r = document) => r.querySelector(s);
@@ -80,22 +81,23 @@ function configVera() { vera((v) => { v.setSarcasm(db.settings.sarcasm); v.setRe
 function onVeraAction() {}
 
 const pickL = (...v) => v[Math.min(db.settings.sarcasm, v.length - 1)];
+const roast = () => db.settings.sarcasm >= 4;
 const Lines = {
-  mood: () => (db.settings.sarcasm >= 2 ? "sarcastica" : "neutral"),
+  mood: () => (db.settings.sarcasm >= 4 ? "enfadada" : db.settings.sarcasm >= 2 ? "sarcastica" : "neutral"),
   hello() {
     const r = S.pay;
     if (r.available < 0) return Lines.deficit();
     if (r.warnings.some((w) => w.code === "SIN_FECHA_COBRO")) return pickL("Hola. Indica en Ajustes la fecha de tu próximo cobro para calcular mejor.", "Hola. Me falta la fecha de tu próximo cobro; ponla en Ajustes.", "Hola. Calculo hasta fin de mes porque no sé cuándo cobras. Una pista en Ajustes y dejo de adivinar.", "Sin fecha de cobro, mis cálculos son provisionales. Como tus planes de ahorro. Ajustes, por favor.");
-    return pickL(`Hola. Hoy puedes gastar ${M(r.today)}.`, `Hola. Hoy puedes gastar ${M(r.today)}. Buen comienzo.`, `Hola de nuevo. Te quedan ${M(r.today)} para hoy. Intentemos que mañana sigan existiendo.`, `Has vuelto. Tu saldo y yo lo celebramos con moderación. Hoy: ${M(r.today)}.`);
+    return pickL(`Hola. Hoy puedes gastar ${M(r.today)}.`, `Hola. Hoy puedes gastar ${M(r.today)}. Buen comienzo.`, `Hola de nuevo. Te quedan ${M(r.today)} para hoy. Intentemos que mañana sigan existiendo.`, `Has vuelto. Tu saldo y yo lo celebramos con moderación. Hoy: ${M(r.today)}.`, `Otra vez tú. Tienes ${M(r.today)} para hoy. Con tu historial, eso dura hasta la hora de comer.`);
   },
   deficit() {
     const r = S.pay, cut = Math.ceil(r.deficit / Math.max(1, r.horizon.days));
-    return pickL(`Aviso: faltan ${M(r.deficit)} para cubrir lo reservado. Opciones: retrasar el ahorro del mes o recortar ${M(cut)} al día.`, `Aviso: hay un déficit de ${M(r.deficit)}. Puedes retrasar el ahorro o recortar ${M(cut)} al día.`, `Aviso. Faltan ${M(r.deficit)}. No es una opinión, es aritmética. Retrasa el ahorro o recorta ${M(cut)} al día.`, `Faltan ${M(r.deficit)}. Las cifras no tienen sentido del humor y hoy yo tampoco. Retrasa el ahorro o recorta ${M(cut)} al día.`);
+    return pickL(`Aviso: faltan ${M(r.deficit)} para cubrir lo reservado. Opciones: retrasar el ahorro del mes o recortar ${M(cut)} al día.`, `Aviso: hay un déficit de ${M(r.deficit)}. Puedes retrasar el ahorro o recortar ${M(cut)} al día.`, `Aviso. Faltan ${M(r.deficit)}. No es una opinión, es aritmética. Retrasa el ahorro o recorta ${M(cut)} al día.`, `Faltan ${M(r.deficit)}. Las cifras no tienen sentido del humor y hoy yo tampoco. Retrasa el ahorro o recorta ${M(cut)} al día.`, `Enhorabuena: has conseguido un déficit de ${M(r.deficit)}. Ni intentándolo lo harías peor. Recorta ${M(cut)} al día o retrasa el ahorro, sujeto de pruebas.`);
   },
   explain() {
     const r = S.pay, x = r.reserved;
     const b = `Saldo líquido ${M(r.liquidBalance)}. Menos recibos ${M(x.obligations)}, ahorro ${M(x.savings)}, objetivos ${M(x.goals)} y colchón ${M(x.buffer)}. Quedan ${M(r.available)} para ${r.horizon.days} días: ${M(r.dailyRate)} al día.` + (r.expectedIncome > 0 ? ` No cuento ${M(r.expectedIncome)} de ingresos que aún no has cobrado.` : "");
-    return pickL(b, b + " Así de sencillo.", b + " Las cuentas no mienten. Las personas, a veces.", b + " Te lo he explicado despacio. Puedo hacerlo más despacio.");
+    return pickL(b, b + " Así de sencillo.", b + " Las cuentas no mienten. Las personas, a veces.", b + " Te lo he explicado despacio. Puedo hacerlo más despacio.", b + " Te lo explico con números porque con palabras ya vimos que no funciona.");
   },
   remarks() {
     if (!db.settings.remarks || db.settings.sarcasm === 0) return [];
@@ -104,18 +106,18 @@ const Lines = {
     out.push(pickL("", "Sin novedades en tus recibos.", "He revisado tus recibos. Todos en orden. Por ahora.", "Sin gastos en un rato. Sospechoso, pero lo acepto."));
     return out.filter(Boolean);
   },
-  draftsReady: (n) => n === 1 ? pickL("Revisa el movimiento y confírmalo.", "Lo tengo. Revísalo y confirma.", "Preparado. No pienso guardarlo a tus espaldas: confírmalo.", "Listo. Si me equivoco, prefiero que sea culpa tuya. Confirma.")
-    : pickL(`He preparado ${n} movimientos. Revísalos y confírmalos.`, `${n} movimientos preparados. Revisa y confirma.`, `${n} movimientos de una sola frase. Impresionante eficiencia gastando. Revísalos.`, `${n} de golpe. Revísalos antes de que me arrepienta de entenderte.`),
+  draftsReady: (n) => n === 1 ? pickL("Revisa el movimiento y confírmalo.", "Lo tengo. Revísalo y confirma.", "Preparado. No pienso guardarlo a tus espaldas: confírmalo.", "Listo. Si me equivoco, prefiero que sea culpa tuya. Confirma.", "Ahí lo tienes. Confírmalo, que hasta para eso necesitas ayuda.")
+    : pickL(`He preparado ${n} movimientos. Revísalos y confírmalos.`, `${n} movimientos preparados. Revisa y confirma.`, `${n} movimientos de una sola frase. Impresionante eficiencia gastando. Revísalos.`, `${n} de golpe. Revísalos antes de que me arrepienta de entenderte.`, `${n} gastos en una frase. Tu cartera llora en silencio. Revísalos.`),
   notUnderstood: () => pickL("No he encontrado ningún importe. Prueba: «23 euros en el súper con tarjeta».", "No veo ningún importe. Ejemplo: «23 euros en el súper».", "Sin importe no hay gasto. Ni siquiera tú puedes gastar «algo». Ejemplo: «23 euros en el súper».", "Necesito una cifra. Una. Ejemplo: «23 euros en el súper»."),
-  discarded: () => pickL("Descartado. No se ha guardado nada.", "Descartado.", "Descartado. Fingiré que no ha pasado.", "Descartado. Ojalá pudiera hacer lo mismo con tus cenas."),
+  discarded: () => pickL("Descartado. No se ha guardado nada.", "Descartado.", "Descartado. Fingiré que no ha pasado.", "Descartado. Ojalá pudiera hacer lo mismo con tus cenas.", "Descartado. Lástima que no puedas descartar así tus malas decisiones."),
   afterSaving(list) {
     const r = S.pay; if (r.available < 0) return [Lines.deficit(), "enfadada", "aviso"];
     const gasto = list.filter((t) => t.kind === "GASTO").reduce((a, t) => a + t.amount, 0), ingreso = list.filter((t) => t.kind === "INGRESO").reduce((a, t) => a + t.amount, 0);
     const cat = (id) => db.categories.find((c) => c.id === id);
     const over = r.categories.find((c) => c.state === "SUPERADO" && list.some((t) => { const k = cat(t.categoryId); return k && (k.id === c.categoryId || k.parentId === c.categoryId); }));
-    if (over) return [pickL(`Guardado. ${over.name} va por ${M(over.spent)} de ${M(over.limit)}. Propuesta: no gastar más en ${over.name.toLowerCase()} este mes.`, `Guardado. ${over.name} supera el límite: ${M(over.spent)} de ${M(over.limit)}. Te propongo pausarlo.`, `Guardado. El límite de ${over.name.toLowerCase()} era ${M(over.limit)}; por lo visto, orientativo. Vas por ${M(over.spent)}. Propuesta: pausa hasta fin de mes.`, `${M(over.spent)} en ${over.name.toLowerCase()} con un límite de ${M(over.limit)}. Admiro tu constancia, en la dirección equivocada. Hoy te quedan ${M(r.today)}.`), db.settings.sarcasm >= 2 ? "sarcastica" : "decepcionada", "habla"];
+    if (over) return [pickL(`Guardado. ${over.name} va por ${M(over.spent)} de ${M(over.limit)}. Propuesta: no gastar más en ${over.name.toLowerCase()} este mes.`, `Guardado. ${over.name} supera el límite: ${M(over.spent)} de ${M(over.limit)}. Te propongo pausarlo.`, `Guardado. El límite de ${over.name.toLowerCase()} era ${M(over.limit)}; por lo visto, orientativo. Vas por ${M(over.spent)}. Propuesta: pausa hasta fin de mes.`, `${M(over.spent)} en ${over.name.toLowerCase()} con un límite de ${M(over.limit)}. Admiro tu constancia, en la dirección equivocada. Hoy te quedan ${M(r.today)}.`, `${M(over.spent)} en ${over.name.toLowerCase()} con un límite de ${M(over.limit)}. Los límites son para gente con autocontrol, ya veo. Pausa ${over.name.toLowerCase()} hasta fin de mes, si eres capaz.`), db.settings.sarcasm >= 2 ? "sarcastica" : "decepcionada", "habla"];
     if (ingreso > 0 && gasto === 0) return [pickL(`Ingreso guardado: ${M(ingreso)}.`, `Ingreso de ${M(ingreso)} guardado. Bien.`, `${M(ingreso)} que entran. Lo registro antes de que encuentres en qué gastarlos.`, `Ingreso: ${M(ingreso)}. Disfruta la sensación; suele durar poco.`), "contenta", "habla"];
-    return [pickL(`Guardado. Hoy te quedan ${M(r.today)}.`, `Guardado: ${M(gasto)}. Quedan ${M(r.today)} para hoy.`, `Guardado: ${M(gasto)}. Te quedan ${M(r.today)} para hoy. Lo digo por si alguien lleva la cuenta. Yo, por ejemplo.`, `Guardado. ${M(r.today)} para hoy. Es una cifra, no un reto.`), r.today < 0 ? "decepcionada" : db.settings.sarcasm >= 2 ? "sarcastica" : "contenta", "habla"];
+    return [pickL(`Guardado. Hoy te quedan ${M(r.today)}.`, `Guardado: ${M(gasto)}. Quedan ${M(r.today)} para hoy.`, `Guardado: ${M(gasto)}. Te quedan ${M(r.today)} para hoy. Lo digo por si alguien lleva la cuenta. Yo, por ejemplo.`, `Guardado. ${M(r.today)} para hoy. Es una cifra, no un reto.`, `Guardado. Otro clavo en el ataúd de tu economía. Te quedan ${M(r.today)} hoy; procura no batir tu récord.`), r.today < 0 ? "decepcionada" : db.settings.sarcasm >= 2 ? "sarcastica" : "contenta", "habla"];
   },
   deleted: (t) => pickL(`Eliminado: ${t.concept || "movimiento"} de ${M(t.amount)}.`, `Fuera: ${t.concept || "ese movimiento"}. Hoy te quedan ${M(S.pay.today)}.`, `Borrado ${t.concept || "el movimiento"}. Si fuera tan fácil borrar los gastos reales… Hoy: ${M(S.pay.today)}.`, `Eliminado. Ojalá el banco tuviera este botón. Hoy: ${M(S.pay.today)}.`),
   edited: (t) => pickL(`Actualizado: ${t.concept || "movimiento"}, ${M(t.amount)}.`, `Corregido. Hoy te quedan ${M(S.pay.today)}.`, `Corregido. Los datos exactos me gustan casi tanto como el ahorro. Hoy: ${M(S.pay.today)}.`, `Corregido. Mejor tarde que nunca. Hoy: ${M(S.pay.today)}.`),
@@ -181,12 +183,22 @@ function home() {
     ${upcoming.length ? upcoming.map((t) => { const st = C.effectiveStatus(t, S.now); return `<button class="row" data-edit="${t.id}"><span><b>${esc(t.concept || "Sin concepto")}</b><small class="${st === "PENDIENTE" ? "w" : ""}">${C.fmtDayLong(C.dateOf(t.dateTime))}${st === "PENDIENTE" ? " · pendiente de confirmar" : ""}</small></span><span class="${t.kind === "INGRESO" ? "pos" : ""}">${t.kind === "INGRESO" ? "+" : "−"}${M(t.amount)}</span></button>`; }).join("") : `<p class="muted">Nada programado. Añade recibos que se repiten con «+».</p>`}
   </section>`;
 }
+/** Gasto de una categoría (con subcategorías) entre dos fechas, según tu parte. */
+function catSpent(catId, from, to) {
+  const ids = C.subtree(catId, db.categories), byId = Object.fromEntries(db.transactions.map((t) => [t.id, t]));
+  return S.live.filter((t) => t.status === "REALIZADO" && ids.has(C.categoryOf(t, byId)) && C.dateOf(t.dateTime) >= from && C.dateOf(t.dateTime) <= to).reduce((a, t) => a + C.spendingShare(t, ME, byId), 0);
+}
+function weekBounds(today) { const mon = C.addDays(today, -C.dow(today)); return [mon, C.addDays(mon, 6)]; }
 function catCard(r) {
   if (!r.categories.length) return "";
+  const today = C.dateOf(S.now), [mon, sun] = weekBounds(today);
   return `<section class="card"><h3>Presupuestos del mes</h3>${r.categories.map((c) => `
     <div class="cat"><div class="cat-h"><span>${esc(c.name)}${c.state !== "BIEN" ? ` <i class="pill ${c.state === "SUPERADO" ? "bad" : "w"}">${c.state === "SUPERADO" ? "Superado" : "Atención"}</i>` : ""}</span><span class="muted">${M(c.spent)} de ${M(c.limit)}</span></div>
     <div class="bar"><i class="${c.state === "SUPERADO" ? "bad" : c.state === "ATENCION" ? "w" : ""}" style="width:${Math.min(100, (c.spent / Math.max(1, c.limit)) * 100)}%"></i></div>
-    <small class="muted">${c.remaining < 0 ? `Superado en ${M(-c.remaining)}` : `Quedan ${M(c.remaining)} · ${M(c.perDay)} al día`}</small></div>`).join("")}</section>`;
+    <small class="muted">${c.remaining < 0 ? `Superado en ${M(-c.remaining)}` : `Quedan ${M(c.remaining)} este mes`}</small>
+    ${(() => { const wk = Math.floor(c.limit / 4), dy = Math.floor(wk / 7), ws = catSpent(c.categoryId, mon, sun), ds = catSpent(c.categoryId, today, today);
+      return `<div class="sub-b"><span>Semana: <b class="${ws > wk ? "neg" : ""}">${M(ws)}</b> de ${M(wk)}</span><span>Hoy: <b class="${ds > dy ? "neg" : ""}">${M(ds)}</b> de ${M(dy)}</span></div>`; })()}</div>`).join("")}
+    <p class="muted small">Semana = límite mensual ÷ 4. Día = semana ÷ 7.</p></section>`;
 }
 let filter = "todos", query = "";
 function movements() {
@@ -203,7 +215,7 @@ function movements() {
       <span class="${t.kind === "INGRESO" ? "pos" : ""}">${t.kind === "INGRESO" ? "+" : t.kind === "GASTO" ? "−" : ""}${M(t.amount)}</span></button>
       ${st !== "REALIZADO" ? `<button class="link" data-confirm="${t.id}">Confirmar</button>` : ""}</div>`;
   }
-  return `<h2>Movimientos</h2>
+  return `<h2>Movimientos <label class="link file">Importar extracto<input type="file" class="bankFile" accept=".pdf,.xlsx,.xls,.ods,.csv,application/pdf" hidden></label></h2>
   <input class="search" id="q" type="search" placeholder="Buscar" value="${esc(query)}">
   <div class="chips">${[["todos", "Todos"], ["gastos", "Gastos"], ["ingresos", "Ingresos"], ["previstos", "Previstos"]].map(([k, l]) => `<button class="chip ${filter === k ? "on" : ""}" data-filter="${k}">${l}</button>`).join("")}</div>
   ${out || `<p class="muted">No hay movimientos con este filtro.</p>`}
@@ -232,7 +244,7 @@ function settings() {
     <label>Ahorro mensual (€)<input inputmode="decimal" id="sSav" value="${moneyInput(s.monthlySavings)}"></label>
     <button class="btn" data-save-plan>Guardar</button></section>
   <section class="card form"><h3>Asistente</h3>
-    <label>Sarcasmo: <b id="sarcLbl">${["Neutra", "Irónica", "Sarcástica", "Despiadada"][s.sarcasm]}</b><input type="range" min="0" max="3" step="1" id="sSarc" value="${s.sarcasm}"></label>
+    <label>Sarcasmo: <b id="sarcLbl">${["Neutra", "Irónica", "Sarcástica", "Despiadada", "Cruel"][s.sarcasm]}</b><input type="range" min="0" max="4" step="1" id="sSarc" value="${s.sarcasm}"></label>
     <label class="sw"><span>Vera habla en voz alta${Voice.canSpeak() ? "" : "<small>Este navegador no tiene voz.</small>"}</span><input type="checkbox" id="sVoice" ${s.voice ? "checked" : ""}></label>
     <label class="sw"><span>Comentarios espontáneos</span><input type="checkbox" id="sRem" ${s.remarks ? "checked" : ""}></label>
     <label class="sw"><span>Reducir movimiento</span><input type="checkbox" id="sRm" ${s.reduceMotion ? "checked" : ""}></label>
@@ -250,6 +262,8 @@ function settings() {
     <button class="btn ghost" data-export>Descargar copia de seguridad</button>
     <button class="btn ghost" data-export-csv>Descargar movimientos (CSV)</button>
     <label class="btn ghost file">Restaurar copia…<input type="file" id="sImport" accept="application/json"></label>
+    <label class="btn file">Importar extracto del banco (PDF, Excel o CSV)<input type="file" class="bankFile" accept=".pdf,.xlsx,.xls,.ods,.csv,application/pdf"></label>
+    <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
   <p class="muted small">Cuentas Claras · versión web · coste 0 €.</p>`;
 }
@@ -363,8 +377,9 @@ async function dictate() {
 
 // ======================= Eventos =======================
 document.addEventListener("click", (e) => {
-  const el = e.target.closest("[data-edit],[data-new],[data-confirm],[data-filter],[data-limit],[data-account],[data-save-plan],[data-save-ai],[data-clear-chat],[data-cat],[data-export],[data-export-csv],[data-close],[data-act]");
+  const el = e.target.closest("[data-undo],[data-edit],[data-new],[data-confirm],[data-filter],[data-limit],[data-account],[data-save-plan],[data-save-ai],[data-clear-chat],[data-cat],[data-export],[data-export-csv],[data-close],[data-act]");
   if (!el) return;
+  if ("undo" in el.dataset) return undo();
   if (el.dataset.edit) return editor(el.dataset.edit);
   if ("new" in el.dataset) return editor(null);
   if (el.dataset.confirm) { const t = db.transactions.find((x) => x.id === el.dataset.confirm); upsertTx(C.confirmTx(t)); afterSave([t], "confirm"); return; }
@@ -382,7 +397,7 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("input", (e) => {
   if (e.target.id === "q") { query = e.target.value; const pos = e.target.selectionStart; render(); const q = $("#q"); q.focus(); q.setSelectionRange(pos, pos); }
-  if (e.target.id === "sSarc") { db.settings.sarcasm = Number(e.target.value); $("#sarcLbl").textContent = ["Neutra", "Irónica", "Sarcástica", "Despiadada"][db.settings.sarcasm]; save(); configVera(); }
+  if (e.target.id === "sSarc") { db.settings.sarcasm = Number(e.target.value); $("#sarcLbl").textContent = ["Neutra", "Irónica", "Sarcástica", "Despiadada", "Cruel"][db.settings.sarcasm]; save(); configVera(); }
 });
 document.addEventListener("change", (e) => {
   const id = e.target.id;
@@ -392,6 +407,7 @@ document.addEventListener("change", (e) => {
   if (id === "sLow") { db.settings.quality = e.target.checked ? "baja" : "alta"; save(); configVera(); }
   if (id === "sDemo") { demo = e.target.checked; localStorage.setItem("cc.mode", demo ? "demo" : "real"); db = load(); materializeAll(); save(); render();
 if (db.chat.length) renderChatBadge(); toast(demo ? "Modo demostración." : "Ahora ves tus datos reales."); }
+  if (e.target.classList.contains("bankFile")) { const f = e.target.files[0]; e.target.value = ""; if (f) importStatement(f); return; }
   if (id === "sImport") { const file = e.target.files[0]; if (!file) return; file.text().then((txt) => { const d = JSON.parse(txt); if (!Array.isArray(d.transactions) || !Array.isArray(d.accounts)) throw new Error("formato"); if (!confirm("Esto sustituye los datos actuales de este modo por los de la copia. ¿Continuar?")) return; db = d; save(); render(); toast("Copia restaurada."); }).catch(() => toast("Ese archivo no es una copia válida de Cuentas Claras.")); }
 });
 addEventListener("hashchange", () => { tab = location.hash.replace("#", "") || "inicio"; render(); });
@@ -466,7 +482,7 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest("[data-approve],[data-reject]"); if (!a) return;
   const id = a.dataset.approve || a.dataset.reject, p = pending.get(id); if (!p) return;
   pending.delete(id); const m = db.chat.find((x) => x.id === id);
-  if (a.dataset.approve) { const out = applyAction(p.tool, p.args); if (m) m.outcome = "Aplicado"; render(); talk(out.comment || "Hecho.", out.mood || Lines.mood()); }
+  if (a.dataset.approve) { if (!["deshacer", "importar_extracto", "exportar_datos"].includes(p.tool)) snapshot(m?.title || "Cambio"); const out = applyAction(p.tool, p.args); if (m) m.outcome = "Aplicado"; render(); talk(out.comment || "Hecho.", out.mood || Lines.mood()); }
   else { if (m) m.outcome = "Cancelado"; talk(Lines.discarded(), Lines.mood()); }
   save(); renderChat();
 });
@@ -514,6 +530,14 @@ async function aiAsk(text) {
 
 function runQuery(name, a) {
   if (name === "ir_a") { location.hash = a.pantalla; return "Pantalla abierta."; }
+  if (name === "listar_recurrentes_y_objetivos") return {
+    recurrentes: db.recurrences.filter((r) => r.active !== false).map((r) => ({ id: r.id, concepto: r.template.concept, tipo: r.template.kind, importe: M(r.template.amount), frecuencia: r.frequency, desde: r.start, veces: r.count ?? null })),
+    objetivos: db.goals.filter((g) => g.active !== false).map((g) => ({ id: g.id, nombre: g.name, objetivo: M(g.target), mensual: M(g.monthlyContribution), ahorrado: M(db.contributions.filter((c) => c.goalId === g.id).reduce((x, c) => x + c.amount, 0)) })) };
+  if (name === "resumen_por_categoria") {
+    const today = C.dateOf(S.now), from = a.desde || C.firstDayOfMonth(today), to = a.hasta || today;
+    const tops = db.categories.filter((c) => !c.parentId && !c.income && !c.archived);
+    return { desde: from, hasta: to, categorias: tops.map((c) => ({ id: c.id, nombre: c.name, gastado: catSpent(c.id, from, to) })).filter((x) => x.gastado).sort((x, y) => y.gastado - x.gastado).map((x) => ({ ...x, gastado: M(x.gastado) })) };
+  }
   const list = S.live.filter((t) => (!a.texto || C.normalize(`${t.concept} ${catName(t.categoryId)} ${t.notes || ""}`).includes(C.normalize(a.texto)))
     && (!a.categoria_id || C.subtree(a.categoria_id, db.categories).has(t.categoryId)) && (!a.desde || C.dateOf(t.dateTime) >= a.desde)
     && (!a.hasta || C.dateOf(t.dateTime) <= a.hasta) && (!a.tipo || t.kind === a.tipo))
@@ -549,6 +573,27 @@ function propose(tool, a) {
     case "renombrar_categoria": { const c = findCat(a.categoria_id); if (!c) return { ok: false, error: "categoría inexistente" }; title = "Renombrar categoría"; text = `${c.name} → ${a.nombre}`; break; }
     case "ajustar_planificacion": { const ch = []; if (a.proximo_cobro) ch.push(`próximo cobro ${C.fmtDay(a.proximo_cobro)}`); if (a.colchon != null) ch.push(`colchón ${M(euros(a.colchon))}`); if (a.ahorro_mensual != null) ch.push(`ahorro mensual ${M(euros(a.ahorro_mensual))}`); if (!ch.length) return { ok: false, error: "nada que cambiar" }; title = "Cambiar planificación"; text = ch.join(", "); break; }
     case "crear_cuenta": { title = "Nueva cuenta"; text = `${a.nombre} · ${TYPES[a.tipo] || a.tipo} · saldo inicial ${M(euros(a.saldo_inicial) || 0)}`; break; }
+    case "eliminar_movimientos": case "recategorizar_movimientos": {
+      const list = selectTx(a); if (!list.length) return { ok: false, error: "ningún movimiento coincide" };
+      if (tool === "recategorizar_movimientos" && !findCat(a.nueva_categoria_id)) return { ok: false, error: "categoría destino inexistente" };
+      a._ids = list.map((t) => t.id);
+      title = tool === "eliminar_movimientos" ? `Eliminar ${list.length} movimiento(s)` : `Cambiar categoría de ${list.length} movimiento(s)`;
+      text = (tool === "recategorizar_movimientos" ? `→ ${catName(a.nueva_categoria_id)}${a.nuevo_concepto ? `, concepto «${a.nuevo_concepto}»` : ""}. ` : "") + `Total ${M(list.reduce((x, t) => x + t.amount, 0))}. ` + list.slice(0, 4).map((t) => `${t.concept || "—"} (${C.fmtDay(C.dateOf(t.dateTime))}, ${M(t.amount)})`).join("; ") + (list.length > 4 ? `… y ${list.length - 4} más` : ""); break;
+    }
+    case "eliminar_categoria": { const c = findCat(a.categoria_id); if (!c) return { ok: false, error: "categoría inexistente" }; const n = S.live.filter((t) => t.categoryId === c.id).length; title = "Quitar categoría"; text = `${c.name}${n ? ` · ${n} movimiento(s) pasan a ${catName(a.mover_a_id && findCat(a.mover_a_id) ? a.mover_a_id : "otros")}` : ""}`; break; }
+    case "editar_cuenta": { const x = db.accounts.find((y) => y.id === a.cuenta_id); if (!x) return { ok: false, error: "cuenta inexistente" }; title = "Editar cuenta"; text = [a.nombre && `nombre «${a.nombre}»`, a.tipo && `tipo ${TYPES[a.tipo]}`, a.saldo_inicial != null && `saldo inicial ${M(euros(a.saldo_inicial))}`, a.para_gastar != null && (a.para_gastar ? "para gastar" : "no para gastar")].filter(Boolean).join(", ") + ` (${x.name})`; break; }
+    case "ajustar_saldo_cuenta": { const x = db.accounts.find((y) => y.id === a.cuenta_id); if (!x) return { ok: false, error: "cuenta inexistente" }; title = "Ajustar saldo"; text = `${x.name}: ${M(S.bal[x.id] ?? 0)} → ${M(euros(a.saldo_real))}`; break; }
+    case "eliminar_cuenta": { const x = db.accounts.find((y) => y.id === a.cuenta_id); if (!x) return { ok: false, error: "cuenta inexistente" }; title = "Quitar cuenta"; text = `${x.name} (saldo ${M(S.bal[x.id] ?? 0)})`; break; }
+    case "crear_recurrente": title = "Nuevo recurrente"; text = `${a.concepto}: ${a.tipo === "INGRESO" ? "+" : "−"}${M(euros(a.importe))} ${({ SEMANAL: "cada semana", MENSUAL: "cada mes", ANUAL: "cada año" })[a.frecuencia]} desde el ${C.fmtDay(a.primera_fecha)}${a.veces ? `, ${a.veces} veces` : ""}`; break;
+    case "detener_recurrente": { const r = db.recurrences.find((x) => x.id === a.recurrente_id); if (!r) return { ok: false, error: "recurrente inexistente" }; title = "Detener recurrente"; text = `${r.template.concept} (${M(r.template.amount)})`; break; }
+    case "crear_objetivo": title = "Nuevo objetivo"; text = `${a.nombre}: ${M(euros(a.importe_objetivo))}, ${M(euros(a.aportacion_mensual))} al mes`; break;
+    case "aportar_objetivo": { const g = db.goals.find((x) => x.id === a.objetivo_id); if (!g) return { ok: false, error: "objetivo inexistente" }; title = "Aportar a objetivo"; text = `${g.name}: +${M(euros(a.importe))}`; break; }
+    case "eliminar_objetivo": { const g = db.goals.find((x) => x.id === a.objetivo_id); if (!g) return { ok: false, error: "objetivo inexistente" }; title = "Eliminar objetivo"; text = g.name; break; }
+    case "cambiar_ajustes": title = "Cambiar ajustes"; text = [a.sarcasmo != null && `sarcasmo: ${["Neutra", "Irónica", "Sarcástica", "Despiadada", "Cruel"][Math.max(0, Math.min(4, a.sarcasmo | 0))]}`, a.voz != null && `voz ${a.voz ? "activada" : "desactivada"}`, a.comentarios != null && `comentarios ${a.comentarios ? "sí" : "no"}`, a.reducir_movimiento != null && `reducir movimiento ${a.reducir_movimiento ? "sí" : "no"}`, a.ahorro_bateria != null && `ahorro de batería ${a.ahorro_bateria ? "sí" : "no"}`, a.modo_demostracion != null && `modo demostración ${a.modo_demostracion ? "sí" : "no"}`].filter(Boolean).join(", "); break;
+    case "importar_extracto": title = "Importar extracto"; text = "Elige el archivo del banco (PDF, Excel o CSV). Lo que tengas anotado en esa cuenta dentro de su periodo se sustituye por el extracto."; break;
+    case "exportar_datos": title = a.formato === "csv" ? "Descargar movimientos (CSV)" : "Descargar copia de seguridad"; text = "Pulsa para descargar."; break;
+    case "deshacer": { const u = undoStack(); if (!u.length) return { ok: false, error: "no hay nada que deshacer" }; title = "Deshacer"; text = `Volver a antes de: ${u.at(-1).label}`; break; }
+    case "borrar_todo": title = "BORRAR TODOS LOS DATOS"; text = `Se eliminan cuentas, ${S.live.length} movimientos, presupuestos y ajustes de ${demo ? "la demostración" : "tus datos reales"}. Podrás deshacerlo justo después.`; break;
     default: return { ok: false, error: "herramienta desconocida" };
   }
   const id = uid(); pending.set(id, { tool, args: a });
@@ -571,8 +616,111 @@ function applyAction(tool, a) {
     case "ajustar_planificacion": { const p = {}; if (a.proximo_cobro) p.nextPayday = a.proximo_cobro; if (a.colchon != null) p.buffer = euros(a.colchon); if (a.ahorro_mensual != null) p.monthlySavings = euros(a.ahorro_mensual); Object.assign(db.settings, p); return done(() => Lines.planSaved()); }
     case "crear_cuenta": { const x = { id: uid(), ownerId: ME, name: a.nombre, type: a.tipo, opening: euros(a.saldo_inicial) || 0, liquid: !["AHORRO", "INVERSION"].includes(a.tipo) }; db.accounts.push(x); return done(() => Lines.accountSaved(x, true)); }
   }
+  if (tool === "eliminar_movimientos") { const n = a._ids.length; a._ids.forEach((id) => { const t = db.transactions.find((x) => x.id === id); if (t) t.deleted = true; }); return done(() => pickL(`Eliminados ${n} movimientos.`, `${n} movimientos fuera.`, `${n} movimientos borrados. Si fuera tan fácil en el banco…`, `${n} borrados. Desaparecen de la app, no de tu conciencia.`, `${n} movimientos borrados. Borrar pruebas no te hace mejor administrador. Hoy: ${M(S.pay.today)}.`)); }
+  if (tool === "recategorizar_movimientos") { a._ids.forEach((id) => { const t = db.transactions.find((x) => x.id === id); if (t) { t.categoryId = a.nueva_categoria_id; if (a.nuevo_concepto) t.concept = a.nuevo_concepto; } }); return done(`Recolocados ${a._ids.length} movimientos en ${catName(a.nueva_categoria_id)}.`); }
+  if (tool === "eliminar_categoria") { const c = findCat(a.categoria_id), to = a.mover_a_id && findCat(a.mover_a_id) ? a.mover_a_id : "otros"; db.transactions.forEach((t) => { if (t.categoryId === c.id) t.categoryId = to; }); db.categories.forEach((x) => { if (x.parentId === c.id) x.parentId = undefined; }); c.archived = true; c.limit = null; return done(`Categoría ${c.name} retirada.`); }
+  if (tool === "editar_cuenta") { const x = db.accounts.find((y) => y.id === a.cuenta_id); if (a.nombre) x.name = a.nombre; if (a.tipo) x.type = a.tipo; if (a.saldo_inicial != null) x.opening = euros(a.saldo_inicial); if (a.para_gastar != null) x.liquid = a.para_gastar; return done(() => Lines.accountSaved(x, false)); }
+  if (tool === "ajustar_saldo_cuenta") { compute(); const x = db.accounts.find((y) => y.id === a.cuenta_id), diff = euros(a.saldo_real) - (S.bal[x.id] ?? 0); if (diff) upsertTx({ id: uid(), ownerId: ME, kind: "AJUSTE", amount: diff, dateTime: C.nowLocal(), status: "REALIZADO", accountId: x.id, concept: "Ajuste de saldo", categoryId: null, notes: "", planned: false }); return done(`${x.name} ajustada a ${M(euros(a.saldo_real))}.`); }
+  if (tool === "eliminar_cuenta") { const x = db.accounts.find((y) => y.id === a.cuenta_id); x.archived = true; return done(`Cuenta ${x.name} retirada. Sus movimientos se conservan.`); }
+  if (tool === "crear_recurrente") { const rid = "r-" + uid().slice(0, 8), acc = db.accounts.some((y) => y.id === a.cuenta_id) ? a.cuenta_id : db.accounts.find((y) => y.liquid)?.id;
+    db.recurrences.push({ id: rid, frequency: a.frecuencia, interval: 1, start: a.primera_fecha, time: "09:00", count: a.veces || null, active: true, template: { id: "tpl-" + rid, ownerId: ME, kind: a.tipo, amount: euros(a.importe), dateTime: `${a.primera_fecha}T09:00`, status: "PREVISTO", accountId: acc, concept: a.concepto, categoryId: findCat(a.categoria_id) ? a.categoria_id : a.tipo === "INGRESO" ? "ing-extra" : "otros", notes: "", planned: true, estimated: !!a.importe_aproximado } });
+    materializeAll(); return done(() => `Recurrente creado: ${a.concepto}. Ya cuenta en tus cálculos; hoy puedes gastar ${M(S.pay.today)}.`); }
+  if (tool === "detener_recurrente") { const r = db.recurrences.find((x) => x.id === a.recurrente_id); r.active = false; const now = C.nowLocal(); db.transactions.forEach((t) => { if (t.recurrenceId === r.id && t.status === "PREVISTO" && t.dateTime > now) t.deleted = true; }); return done(`${r.template.concept} ya no se repite.`); }
+  if (tool === "crear_objetivo") { db.goals.push({ id: "g-" + uid().slice(0, 8), name: a.nombre, target: euros(a.importe_objetivo), monthlyContribution: euros(a.aportacion_mensual), heldInLiquidAccount: !!a.dinero_en_cuenta_corriente, active: true }); return done(() => `Objetivo «${a.nombre}» creado. Reservo ${M(euros(a.aportacion_mensual))} al mes; hoy te quedan ${M(S.pay.today)}.`); }
+  if (tool === "aportar_objetivo") { db.contributions.push({ goalId: a.objetivo_id, amount: euros(a.importe), date: C.dateOf(C.nowLocal()) }); return done(`Aportados ${M(euros(a.importe))}.`); }
+  if (tool === "eliminar_objetivo") { const g = db.goals.find((x) => x.id === a.objetivo_id); g.active = false; return done(`Objetivo ${g.name} eliminado.`); }
+  if (tool === "cambiar_ajustes") { const st = db.settings; if (a.sarcasmo != null) st.sarcasm = Math.max(0, Math.min(4, a.sarcasmo | 0)); if (a.voz != null) st.voice = a.voz; if (a.comentarios != null) st.remarks = a.comentarios; if (a.reducir_movimiento != null) st.reduceMotion = a.reducir_movimiento; if (a.ahorro_bateria != null) st.quality = a.ahorro_bateria ? "baja" : "alta";
+    save(); configVera(); if (a.modo_demostracion != null && a.modo_demostracion !== demo) { demo = a.modo_demostracion; localStorage.setItem("cc.mode", demo ? "demo" : "real"); db = load(); materializeAll(); }
+    return done(() => st.sarcasm >= 4 && a.sarcasmo != null ? "Modo cruel activado. Tú lo has pedido." : "Ajustes cambiados."); }
+  if (tool === "importar_extracto") { $("#bankPick").click(); return { comment: "Elige el archivo del extracto." }; }
+  if (tool === "exportar_datos") { if (a.formato === "csv") download(`movimientos-${C.dateOf(C.nowLocal())}.csv`, csv(), "text/csv"); else download(`cuentas-claras-${C.dateOf(C.nowLocal())}.json`, JSON.stringify(db, null, 2), "application/json"); return { comment: "Descarga preparada." }; }
+  if (tool === "deshacer") { undo(); return { comment: "" }; }
+  if (tool === "borrar_todo") { const keep = { ...db.settings }; db = blank(); db.settings = keep; return done("Todo borrado. Empezamos de cero. Si ha sido un error, di «deshaz»."); }
   return { comment: "Hecho." };
 }
+/** Movimientos que cumplen un filtro de la IA (ids o texto/categoría/cuenta/fechas/tipo). */
+function selectTx(a) {
+  if (a.ids?.length) return S.live.filter((t) => a.ids.includes(t.id));
+  const cat = a.categoria_id || a.categoria_actual_id;
+  if (!a.texto && !cat && !a.cuenta_id && !a.desde && !a.hasta && !a.tipo) return [];
+  return S.live.filter((t) => (!a.texto || C.normalize(`${t.concept} ${t.notes || ""}`).includes(C.normalize(a.texto)))
+    && (!cat || C.subtree(cat, db.categories).has(t.categoryId)) && (!a.cuenta_id || t.accountId === a.cuenta_id || t.toAccountId === a.cuenta_id)
+    && (!a.desde || C.dateOf(t.dateTime) >= a.desde) && (!a.hasta || C.dateOf(t.dateTime) <= a.hasta) && (!a.tipo || t.kind === a.tipo));
+}
+
+// ======================= Deshacer =======================
+const UNDO_KEY = () => (demo ? "cc.demo.undo" : "cc.undo");
+function undoStack() { try { return JSON.parse(localStorage.getItem(UNDO_KEY()) || "[]"); } catch (_) { return []; } }
+function snapshot(label) {
+  const st = undoStack(); st.push({ label, at: C.nowLocal(), data: JSON.stringify({ ...db, chat: [] }) });
+  let keep = st.slice(-3);
+  while (keep.length) { try { localStorage.setItem(UNDO_KEY(), JSON.stringify(keep)); break; } catch (_) { keep = keep.slice(1); } }
+}
+function undo() {
+  const st = undoStack(); const last = st.pop();
+  if (!last) return talk("No hay nada que deshacer.", "neutral");
+  const chat = db.chat; db = JSON.parse(last.data); db.chat = chat; db.settings = { ...DEFAULT_SETTINGS, ...db.settings };
+  localStorage.setItem(UNDO_KEY(), JSON.stringify(st)); save(); render();
+  talk(pickL(`Deshecho: ${last.label}.`, `Deshecho: ${last.label}.`, `Deshecho: ${last.label}. Rectificar es de sabios; acertar a la primera, de otros.`, `Deshecho. Volvemos a como estaba antes de tu ocurrencia.`, `Deshecho. Ojalá tuvieras este botón en la vida real; lo usarías a diario.`), Lines.mood());
+}
+
+// ======================= Importar extracto =======================
+async function importStatement(file) {
+  const acc = db.accounts.find((a) => a.type === "CORRIENTE" && !a.archived) || db.accounts.find((a) => a.liquid && !a.archived);
+  if (!acc) return talk("Primero crea una cuenta corriente para importar el extracto.", "neutral");
+  if ($("#chat").open) $("#chat").close();
+  vera((v) => { v.setState("pensando"); v.show("Leyendo el extracto…"); });
+  const t = $("#toast"); const progress = (msg) => { vera((v) => v.show(msg)); t.textContent = msg; t.classList.add("show"); };
+  progress("Leyendo el extracto…");
+  let st;
+  try {
+    const r = await Importer.readFile(file, progress);
+    st = r.kind === "text" ? Importer.parseStatementText(r.text) : Importer.parseStatementRows(r.rows);
+  } catch (err) { t.classList.remove("show"); vera((v) => v.setState("reposo")); return talk("No he podido leer el extracto: " + err.message, "neutral"); }
+  t.classList.remove("show"); compute();
+  const p = Importer.plan(db, st, acc.id, ME, C.nowLocal());
+  vera((v) => v.setState("atencion"));
+  openSheet(`<h3>Importar extracto</h3>
+    <p>Del ${C.fmtDay(p.from)} ${p.from.slice(0, 4)} al ${C.fmtDay(p.to)} ${p.to.slice(0, 4)} · cuenta <b>${esc(acc.name)}</b></p>
+    <div class="line"><span>Movimientos del banco</span><span>${p.add.length}</span></div>
+    <div class="line"><span>Entradas</span><span class="pos">${M(p.income)}</span></div>
+    <div class="line"><span>Gastos</span><span>${M(p.spent)}</span></div>
+    <div class="line"><span>Anotaciones de esa cuenta en ese periodo que se sustituyen</span><span class="w">${p.remove.length}</span></div>
+    ${p.check?.checked ? `<p class="muted small">Comprobación con el saldo del banco: ${p.check.ok} de ${p.check.checked} filas cuadran.</p>` : ""}
+    ${p.warnings.map((w) => `<p class="w small">${esc(w)}</p>`).join("")}
+    <form id="impForm" class="form">
+      ${p.opening != null ? `<label class="sw"><span>Ajustar el saldo de ${esc(acc.name)} a ${M(st.balance)}<small>Para que cuadre con el banco.</small></span><input type="checkbox" name="bal" checked></label>` : ""}
+      ${p.newCats.length ? `<label class="sw"><span>Crear categorías<small>${esc(p.newCats.map((c) => c.name).join(", "))}</small></span><input type="checkbox" name="cats" checked></label>` : ""}
+      ${p.limits.length ? `<label class="sw"><span>Crear presupuestos con tu media mensual<small>${esc(p.limits.map((l) => `${l.name} ${M(l.monthly)}`).join(" · "))}</small></span><input type="checkbox" name="lims" checked></label>` : ""}
+      <p class="muted small">Podrás deshacer la importación desde Ajustes o diciéndoselo a Vera.</p>
+      <div class="actions"><button class="btn">Importar</button><button class="btn ghost" type="button" data-close>Cancelar</button></div>
+    </form>`, (root) => {
+    $("#impForm", root).addEventListener("submit", (e) => {
+      e.preventDefault(); const f = e.target;
+      snapshot(`importar el extracto del ${C.fmtDay(p.from)} al ${C.fmtDay(p.to)}`);
+      const removeIds = new Set(p.remove.map((x) => x.id)), addIds = new Set(p.add.map((x) => x.id));
+      db.transactions = db.transactions.filter((x) => !removeIds.has(x.id) && !addIds.has(x.id));
+      db.transactions.push(...p.add);
+      if (f.cats?.checked) p.newCats.forEach((c) => db.categories.push({ ...c, custom: true }));
+      else p.add.forEach((x) => { if (p.newCats.some((c) => c.id === x.categoryId)) x.categoryId = x.kind === "INGRESO" || x.kind === "AJUSTE" ? "ing-extra" : "otros"; });
+      if (f.lims?.checked) p.limits.forEach((l) => { const c = db.categories.find((x) => x.id === l.categoryId); if (c && !c.limit) c.limit = l.monthly; });
+      if (f.bal?.checked && p.opening != null) acc.opening = p.opening;
+      save(); closeSheet(); render(); compute();
+      talk(importComment(p), Lines.mood());
+    });
+  });
+}
+function importComment(p) {
+  const byCat = {};
+  p.add.filter((x) => x.kind === "GASTO").forEach((x) => { const c = db.categories.find((y) => y.id === x.categoryId); const top = c?.parentId ? db.categories.find((y) => y.id === c.parentId) : c; const k = top?.name || "Otros"; byCat[k] = (byCat[k] ?? 0) + x.amount; });
+  const [worst, amount] = Object.entries(byCat).filter(([k]) => k !== "Otros").sort((a, b) => b[1] - a[1])[0] || ["varios", 0];
+  return pickL(`Importados ${p.add.length} movimientos. Donde más gastas: ${worst}, ${M(amount)}. Hoy puedes gastar ${M(S.pay.today)}.`,
+    `${p.add.length} movimientos importados. Tu mayor gasto: ${worst} (${M(amount)}). Hoy: ${M(S.pay.today)}.`,
+    `He leído ${p.add.length} movimientos. ${M(amount)} en ${worst.toLowerCase()}. Fascinante. Hoy te quedan ${M(S.pay.today)}.`,
+    `${p.add.length} movimientos. ${M(amount)} en ${worst.toLowerCase()}. Ahora entiendo muchas cosas. Hoy: ${M(S.pay.today)}.`,
+    `${p.add.length} movimientos de pura incompetencia financiera. ${M(amount)} en ${worst.toLowerCase()}. Si esto fuera un experimento, ya lo habría cancelado. Hoy: ${M(S.pay.today)}.`);
+}
+
 function applyPlan(p) { Object.assign(db.settings, p); save(); render(); talk(Lines.planSaved(), Lines.mood()); }
 
 /** Sin IA: gastos e ingresos con el intérprete local, y unas cuantas órdenes y preguntas habituales. */

@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: "22"
       - name: Pruebas del motor web
-        run: node --test web/test/core.test.js
+        run: node --test web/test/core.test.js web/test/importer.test.js
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
