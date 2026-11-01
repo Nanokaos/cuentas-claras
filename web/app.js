@@ -214,9 +214,22 @@ function catCard(r) {
       return `<div class="sub-b"><span>Semana: <b class="${ws > wk ? "neg" : ""}">${M(ws)}</b> de ${M(wk)}</span><span>Hoy: <b class="${ds > dy ? "neg" : ""}">${M(ds)}</b> de ${M(dy)}</span></div>`; })()}</div>`).join("")}
     <p class="muted small">Semana = límite mensual ÷ 4. Día = semana ÷ 7.</p></section>`;
 }
-let filter = "todos", query = "";
+let filter = "todos", query = "", accTab = sessionStorage.getItem("cc.accTab") || "todas";
+/** Pestañas por cuenta en Movimientos: todas o una sola, con su saldo y su extracto. */
+function accountTabs() {
+  const accs = db.accounts.filter((a) => !a.archived);
+  if (accTab !== "todas" && !accs.some((a) => a.id === accTab)) accTab = "todas";
+  const tabs = `<div class="acctabs" role="tablist"><button class="acctab ${accTab === "todas" ? "on" : ""}" data-acctab="todas"><b>Todas</b><small>${M(S.pay.totalBalance)}</small></button>${accs.map((a) => `<button class="acctab ${accTab === a.id ? "on" : ""}" data-acctab="${a.id}"><b>${esc(a.name)}</b><small class="${(S.bal[a.id] ?? 0) < 0 ? "neg" : ""}">${M(S.bal[a.id] ?? 0)}</small></button>`).join("")}<button class="acctab add" data-account="">+ Cuenta</button></div>`;
+  if (accTab === "todas") return tabs;
+  const a = accs.find((x) => x.id === accTab), m = monthFlow(a.id);
+  return tabs + `<section class="card acchead"><div class="acchead-top"><span><b>${esc(a.name)}</b><small>${TYPES[a.type]} · ${a.liquid ? "para gastar" : "ahorro, no cuenta para gastar"}</small></span><span class="mid ${(S.bal[a.id] ?? 0) < 0 ? "neg" : ""}">${M(S.bal[a.id] ?? 0)}</span></div>
+    <small class="muted">${a.type === "EFECTIVO" ? "El efectivo se apunta a mano." : a.iban ? `IBAN ···${esc(a.iban.slice(-4))}: sus extractos se reconocen solos.` : "Sin IBAN todavía: se detecta al importar su PDF, o puedes ponerlo a mano en «Editar»."}</small>
+    ${m.in || m.out ? `<small class="muted">Este mes: entra ${M(m.in)} · sale ${M(m.out)}</small>` : ""}
+    <div class="actions">${a.type === "EFECTIVO" ? "" : `<label class="btn file">Importar su extracto<input type="file" class="bankFile" data-acc="${a.id}" accept=".pdf,.xlsx,.xls,.ods,.csv,application/pdf"></label>`}<button class="btn ghost" data-new>Añadir a mano</button><button class="btn ghost" data-account="${a.id}">Editar</button></div></section>`;
+}
 function movements() {
-  const list = S.live.filter((t) => filter === "todos" || (filter === "gastos" && t.kind === "GASTO") || (filter === "ingresos" && t.kind === "INGRESO") || (filter === "previstos" && C.effectiveStatus(t, S.now) !== "REALIZADO"))
+  const inAcc = (t) => accTab === "todas" || t.accountId === accTab || t.toAccountId === accTab;
+  const list = S.live.filter(inAcc).filter((t) => filter === "todos" || (filter === "gastos" && t.kind === "GASTO") || (filter === "ingresos" && t.kind === "INGRESO") || (filter === "previstos" && C.effectiveStatus(t, S.now) !== "REALIZADO"))
     .filter((t) => !query || C.normalize(`${t.concept} ${catName(t.categoryId)} ${t.notes || ""} ${t.who || ""}`).includes(C.normalize(query)))
     .sort((a, b) => (a.dateTime < b.dateTime ? 1 : -1));
   let last = "", out = "";
@@ -226,10 +239,12 @@ function movements() {
     const acc = t.kind === "TRASPASO" ? `${accName(t.accountId)} → ${accName(t.toAccountId)}` : accName(t.accountId);
     out += `<div class="card tx"><button class="row" data-edit="${t.id}"><span><b>${esc(t.concept || catName(t.categoryId) || "Sin concepto")}</b><small>${esc([catName(t.categoryId), acc, t.dateTime.slice(11, 16)].filter(Boolean).join(" · "))}</small>
       ${st === "PENDIENTE" ? `<small class="w">Pendiente de confirmar</small>` : st === "PREVISTO" ? `<small class="v">${t.estimated ? "Previsto (estimado)" : "Previsto"}</small>` : ""}</span>
-      <span class="${t.kind === "INGRESO" ? "pos" : ""}">${t.kind === "INGRESO" ? "+" : t.kind === "GASTO" ? "−" : ""}${M(t.amount)}</span></button>
+      ${(() => { const sign = t.kind === "TRASPASO" && accTab !== "todas" ? (t.toAccountId === accTab ? "+" : "−") : t.kind === "INGRESO" || t.kind === "DEVOLUCION" ? "+" : t.kind === "GASTO" ? "−" : t.kind === "AJUSTE" ? (t.amount < 0 ? "" : "+") : "";
+        return `<span class="${sign === "+" ? "pos" : ""}">${sign}${M(t.amount)}</span>`; })()}</button>
       ${st !== "REALIZADO" ? `<button class="link" data-confirm="${t.id}">Confirmar</button>` : ""}</div>`;
   }
   return `<h2>Movimientos <label class="link file">Importar extracto<input type="file" class="bankFile" accept=".pdf,.xlsx,.xls,.ods,.csv,application/pdf" hidden></label></h2>
+  ${accountTabs()}
   <input class="search" id="q" type="search" placeholder="Buscar" value="${esc(query)}">
   <div class="chips">${[["todos", "Todos"], ["gastos", "Gastos"], ["ingresos", "Ingresos"], ["previstos", "Previstos"]].map(([k, l]) => `<button class="chip ${filter === k ? "on" : ""}" data-filter="${k}">${l}</button>`).join("")}</div>
   ${out || `<p class="muted">No hay movimientos con este filtro.</p>`}
@@ -289,13 +304,13 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.01h · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.01i · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
 function editor(id) {
   const t = id ? db.transactions.find((x) => x.id === id) : null;
-  const d = t ? { ...t } : { id: uid(), ownerId: ME, kind: "GASTO", amount: null, dateTime: C.nowLocal(), status: "REALIZADO", accountId: db.accounts.find((a) => a.liquid)?.id, concept: "", categoryId: null, notes: "" };
+  const d = t ? { ...t } : { id: uid(), ownerId: ME, kind: "GASTO", amount: null, dateTime: C.nowLocal(), status: "REALIZADO", accountId: (tab === "movimientos" && db.accounts.some((a) => a.id === accTab && !a.archived) ? accTab : db.accounts.find((a) => a.liquid)?.id), concept: "", categoryId: null, notes: "" };
   openSheet(`<h3>${t ? "Editar movimiento" : "Nuevo movimiento"}</h3>
     <div class="chips" id="eKind">${[["GASTO", "Gasto"], ["INGRESO", "Ingreso"], ["TRASPASO", "Traspaso"]].map(([k, l]) => `<button type="button" class="chip ${d.kind === k ? "on" : ""}" data-k="${k}">${l}</button>`).join("")}</div>
     <form id="eForm" class="form">
@@ -418,13 +433,14 @@ async function dictate() {
 
 // ======================= Eventos =======================
 document.addEventListener("click", (e) => {
-  const el = e.target.closest("[data-undo],[data-edit],[data-new],[data-confirm],[data-filter],[data-limit],[data-account],[data-save-plan],[data-save-ai],[data-clear-chat],[data-cat],[data-export],[data-export-csv],[data-close],[data-act]");
+  const el = e.target.closest("[data-undo],[data-edit],[data-new],[data-confirm],[data-filter],[data-limit],[data-account],[data-save-plan],[data-save-ai],[data-clear-chat],[data-cat],[data-export],[data-export-csv],[data-close],[data-act],[data-acctab]");
   if (!el) return;
   if ("undo" in el.dataset) return undo();
   if (el.dataset.edit) return editor(el.dataset.edit);
   if ("new" in el.dataset) return editor(null);
   if (el.dataset.confirm) { const t = db.transactions.find((x) => x.id === el.dataset.confirm); upsertTx(C.confirmTx(t)); afterSave([t], "confirm"); return; }
   if (el.dataset.filter) { filter = el.dataset.filter; return render(); }
+  if (el.dataset.acctab) { accTab = el.dataset.acctab; sessionStorage.setItem("cc.accTab", accTab); render(); $(".acctab.on")?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" }); return; }
   if (el.dataset.limit) return categorySheet(el.dataset.limit);
   if ("account" in el.dataset) return accountSheet(el.dataset.account);
   if (el.dataset.act === "two-accounts") return twoAccountsSheet();
@@ -455,7 +471,7 @@ document.addEventListener("change", (e) => {
   if (id === "sLow") { db.settings.quality = e.target.checked ? "baja" : "alta"; save(); configVera(); }
   if (id === "sDemo") { demo = e.target.checked; localStorage.setItem("cc.mode", demo ? "demo" : "real"); db = load(); fixCashWithdrawals(); materializeAll(); save(); render();
 if (db.chat.length) renderChatBadge(); toast(demo ? "Modo demostración." : "Ahora ves tus datos reales."); }
-  if (e.target.classList.contains("bankFile")) { const f = e.target.files[0]; e.target.value = ""; if (f) importStatement(f); return; }
+  if (e.target.classList.contains("bankFile")) { const f = e.target.files[0], acc = e.target.dataset.acc; e.target.value = ""; if (f) importStatement(f, acc); return; }
   if (id === "sImport") { const file = e.target.files[0]; if (!file) return; file.text().then((txt) => { const d = JSON.parse(txt); if (!Array.isArray(d.transactions) || !Array.isArray(d.accounts)) throw new Error("formato"); if (!confirm("Esto sustituye los datos actuales de este modo por los de la copia. ¿Continuar?")) return; db = d; save(); render(); toast("Copia restaurada."); }).catch(() => toast("Ese archivo no es una copia válida de Cuentas Claras.")); }
 });
 addEventListener("hashchange", () => { tab = location.hash.replace("#", "") || "inicio"; render(); });
@@ -985,7 +1001,7 @@ function undo() {
 }
 
 // ======================= Importar extracto =======================
-async function importStatement(file) {
+async function importStatement(file, forcedAcc = null) {
   if ($("#chat").open) $("#chat").close();
   vera((v) => { v.setState("pensando"); v.show("Leyendo el extracto…"); });
   const t = $("#toast"); const progress = (msg) => { vera((v) => v.show(msg)); t.textContent = msg; t.classList.add("show"); };
@@ -999,10 +1015,12 @@ async function importStatement(file) {
   // ¿De qué cuenta es? Por el IBAN; si no se conoce, se pregunta y se recuerda.
   const banks = db.accounts.filter((a) => !a.archived && a.type !== "EFECTIVO");
   const known = Importer.accountForIban(banks, st.iban);
-  const guess = known || banks.find((a) => !a.iban && a.liquid) || banks.find((a) => !a.iban) || banks[0];
+  const forced = banks.find((a) => a.id === forcedAcc) || null;
+  const mismatch = forced && known && known.id !== forced.id ? known : null;
+  const guess = known || forced || (banks.every((a) => a.iban) && st.iban ? null : banks.find((a) => !a.iban && a.liquid) || banks.find((a) => !a.iban) || banks[0]);
   const ibanTxt = st.iban ? `IBAN acabado en ${st.iban.slice(-4)}` : "sin IBAN en el extracto";
   vera((v) => v.setState("atencion"));
-  if (!known) talk(st.iban ? pickL(`No conozco la cuenta ${ibanTxt}. Dime cuál es y la recordaré.`, `Cuenta nueva para mí: ${ibanTxt}. ¿Cuál es?`, `Un IBAN desconocido, acabado en ${st.iban.slice(-4)}. Dime de qué cuenta es; yo lo recordaré, tú seguramente no.`, `IBAN acabado en ${st.iban.slice(-4)}. ¿Cuál de tus cuentas es? Elige bien, que me conozco tu historial.`, `IBAN acabado en ${st.iban.slice(-4)}. Dime de qué cuenta es. Intenta no equivocarte también en esto.`) : "El extracto no trae IBAN. Elige de qué cuenta es.", "neutral", "atencion", { log: false });
+  if (!known && !forced) talk(st.iban ? pickL(`No conozco la cuenta ${ibanTxt}. Dime cuál es y la recordaré.`, `Cuenta nueva para mí: ${ibanTxt}. ¿Cuál es?`, `Un IBAN desconocido, acabado en ${st.iban.slice(-4)}. Dime de qué cuenta es; yo lo recordaré, tú seguramente no.`, `IBAN acabado en ${st.iban.slice(-4)}. ¿Cuál de tus cuentas es? Elige bien, que me conozco tu historial.`, `IBAN acabado en ${st.iban.slice(-4)}. Dime de qué cuenta es. Intenta no equivocarte también en esto.`) : "El extracto no trae IBAN. Elige de qué cuenta es.", "neutral", "atencion", { log: false });
   const opts = (sel) => banks.map((a) => `<option value="${a.id}" ${a.id === sel ? "selected" : ""}>${esc(a.name)}${a.liquid ? " (gasto)" : " (ahorro)"}${a.iban ? " · ···" + esc(a.iban.slice(-4)) : ""}</option>`).join("")
     + `<option value="new-spend">Nueva cuenta de gasto</option><option value="new-save">Nueva cuenta de nómina y ahorro</option>`;
   const draw = (accId) => {
@@ -1013,6 +1031,7 @@ async function importStatement(file) {
     <p>Del ${C.fmtDay(p.from)} ${p.from.slice(0, 4)} al ${C.fmtDay(p.to)} ${p.to.slice(0, 4)} · ${esc(ibanTxt)}</p>
     <form id="impForm" class="form">
       <label>${known ? "Cuenta reconocida por el IBAN" : "¿De qué cuenta es este extracto?"}<select name="acc">${opts(isNew ? accId : acc.id)}</select></label>
+      ${mismatch ? `<p class="w small">Ojo: por el IBAN, este extracto es de «${esc(mismatch.name)}», no de «${esc(forced.name)}». Lo he puesto en la suya; cámbialo si de verdad es de la otra.</p>` : ""}
       ${st.iban && !known ? `<p class="muted small">Recordaré este IBAN para la próxima vez.</p>` : ""}
       <div class="line"><span>Movimientos del banco</span><span>${p.rows}</span></div>
       <div class="line"><span>Entradas</span><span class="pos">${M(p.income)}</span></div>
