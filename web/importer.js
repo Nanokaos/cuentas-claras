@@ -61,7 +61,7 @@ async function readPdf(file, onProgress) {
 // ---------------- Interpretación (puro, probado en node) ----------------
 const D = /(\d{2})[/.-](\d{2})[/.-](\d{4})/;
 const toISO = (m) => `${m[3]}-${m[2]}-${m[1]}`;
-/** Importe del banco: «-21.78», «-1.234,56», «49.0», «167,54€», «189, 54€». */
+/** Importe del banco: «-21.78», «-1.234,56», «49.0», «123,45€», «189, 54€». */
 export function bankAmount(s) {
   if (s == null) return null;
   let t = String(s).replace(/€|EUR/gi, "").replace(/\s+/g, "").replace(/[−–]/g, "-");
