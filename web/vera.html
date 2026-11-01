@@ -163,19 +163,19 @@ let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" }); }
 catch (err) { stage.insertAdjacentHTML("beforeend", '<div class="fallback">Este navegador no puede mostrar gráficos 3D (WebGL). La app usará una versión simplificada.</div>'); throw err; }
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .8;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .78;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x07050d);
-scene.fog = new THREE.FogExp2(0x0a0912, .06);
+scene.background = new THREE.Color(0x0b0712);
+scene.fog = new THREE.FogExp2(0x100a18, .045);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), .04).texture;
 scene.environmentIntensity = .35;
 
-const camera = new THREE.PerspectiveCamera(38, 1, .05, 120);
-const camBase = new THREE.Vector3(.15, 1.72, 4.9), camLook = new THREE.Vector3(.35, 2.18, 0);
+const camera = new THREE.PerspectiveCamera(42, 1, .05, 140);
+const camBase = new THREE.Vector3(-.35, 1.45, 5.2), camLook = new THREE.Vector3(.45, 2.55, 0);
 
 // ---------- Texturas procedurales ----------
 function canvasTex(w, h, draw, repeat) {
@@ -260,81 +260,135 @@ const stripMats = [new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff3fd0
 const lampMat = new THREE.MeshStandardMaterial({ color: 0, emissive: 0xd9ccff, emissiveIntensity: 1.3 });
 const add = (parent, geo, material, opts = {}) => { const me = new THREE.Mesh(geo, material); if (opts.p) me.position.set(...opts.p); if (opts.r) me.rotation.set(...opts.r); me.castShadow = opts.cast ?? true; me.receiveShadow = opts.recv ?? true; parent.add(me); return me; };
 
-// ---------- Nave industrial ----------
+// ---------- Centro de datos industrial distópico ----------
+// Pasillo de armarios de servidores sobre una pasarela de rejilla, foso con tuberías incandescentes debajo,
+// nave altísima con cerchas, grúas puente, ventanales violetas y mazos de cables colgando. Todo procedural.
 const room = new THREE.Group(); scene.add(room);
-const RW = 4.2, RH = 4.3, Z0 = 3.5, Z1 = -40;
-const floor = add(room, new THREE.PlaneGeometry(RW * 2, Z0 - Z1), mat.floor, { r: [-Math.PI / 2, 0, 0], p: [0, 0, (Z0 + Z1) / 2], cast: false });
-add(room, new THREE.PlaneGeometry(RW * 2, Z0 - Z1), mat.dark, { r: [Math.PI / 2, 0, 0], p: [0, RH, (Z0 + Z1) / 2], cast: false });
-for (let z = Z0, i = 0; z > Z1; z -= 3, i++) {
-  for (const s of [-1, 1]) {
-    const wall = add(room, new THREE.BoxGeometry(.12, RH, 2.62), mat.wall, { p: [s * (RW - .06), RH / 2, z - 1.5], cast: false });
-    add(room, new THREE.BoxGeometry(.42, RH, .38), mat.steel, { p: [s * (RW - .2), RH / 2, z], cast: false });
-    add(room, new THREE.BoxGeometry(.5, .3, .46), mat.steel, { p: [s * (RW - .24), .15, z], cast: false });
-    add(room, new THREE.BoxGeometry(.05, .05, 2.6), stripMats[(i + (s > 0 ? 1 : 0)) % 2], { p: [s * (RW - .16), .34, z - 1.5], cast: false, recv: false });
-    if (i % 2 === 0) add(room, new THREE.BoxGeometry(.04, .9, .05), stripMats[0], { p: [s * (RW - .15), 2.6, z - .25], cast: false, recv: false });
-    [3.55, 3.75, 1.35].forEach((y, k) => add(room, new THREE.CylinderGeometry(k === 2 ? .09 : .06, k === 2 ? .09 : .06, 3, 12), mat.pipe, { r: [Math.PI / 2, 0, 0], p: [s * (RW - .42 - k * .12), y, z - 1.5], cast: false }));
-    add(room, new THREE.BoxGeometry(.4, .06, .08), mat.steel, { p: [s * (RW - .4), 3.62, z - .6], cast: false });
-  }
-  add(room, new THREE.BoxGeometry(RW * 2, .32, .3), mat.steel, { p: [0, RH - .16, z], cast: false });
-  if (i % 2 === 1) add(room, new THREE.BoxGeometry(1.4, .04, .5), lampMat, { p: [0, RH - .34, z - 1.5], cast: false, recv: false });
+const RW = 4.2, RH = 4.3, HH = 15, Z0 = 4, Z1 = -46, HW = 10;
+// rejilla de la pasarela (se ve el foso a través)
+const gridTex = canvasTex(256, 256, (g) => { g.clearRect(0, 0, 256, 256); g.fillStyle = "#3a3842"; for (let i = 0; i <= 256; i += 32) { g.fillRect(i - 3, 0, 6, 256); g.fillRect(0, i - 2, 256, 4); } for (let i = 16; i < 256; i += 32) g.fillRect(0, i - 1, 256, 2); noise(g, 256, 256, 30); }, [6, 34]);
+const grate = new THREE.MeshStandardMaterial({ map: gridTex, alphaMap: gridTex, transparent: false, alphaTest: .35, metalness: .8, roughness: .55, side: THREE.DoubleSide });
+gridTex.colorSpace = THREE.SRGBColorSpace;
+add(room, new THREE.PlaneGeometry(3.6, Z0 - Z1), grate, { r: [-Math.PI / 2, 0, 0], p: [0, 0, (Z0 + Z1) / 2], cast: false });
+// barandillas
+for (const s of [-1, 1]) {
+  add(room, new THREE.BoxGeometry(.05, .05, Z0 - Z1), mat.steel, { p: [s * 1.8, 1.05, (Z0 + Z1) / 2], cast: false });
+  add(room, new THREE.BoxGeometry(.03, .03, Z0 - Z1), mat.steel, { p: [s * 1.8, .55, (Z0 + Z1) / 2], cast: false });
+  for (let z = Z0; z > Z1; z -= 1.5) add(room, new THREE.BoxGeometry(.04, 1.05, .04), mat.steel, { p: [s * 1.8, .52, z], cast: false });
 }
-// compuerta del fondo
-const door = new THREE.Group(); door.position.set(0, 0, Z1 + .4); room.add(door);
-add(door, new THREE.BoxGeometry(RW * 2, RH, .2), mat.wall, { p: [0, RH / 2, 0], cast: false });
-add(door, new THREE.BoxGeometry(2.6, 3, .1), mat.steel, { p: [0, 1.5, .12], cast: false });
-for (const [w, h, x, y] of [[2.8, .07, 0, 3.05], [.07, 3, -1.36, 1.5], [.07, 3, 1.36, 1.5]]) add(door, new THREE.BoxGeometry(w, h, .05), stripMats[0], { p: [x, y, .2], cast: false, recv: false });
-add(door, new THREE.BoxGeometry(.04, 2.9, .05), stripMats[1], { p: [0, 1.5, .2], cast: false, recv: false });
+// foso: suelo profundo con tuberías y luz anaranjada
+const pitMat = new THREE.MeshStandardMaterial({ color: 0x120c10, metalness: .6, roughness: .7 });
+add(room, new THREE.PlaneGeometry(HW * 2, Z0 - Z1), pitMat, { r: [-Math.PI / 2, 0, 0], p: [0, -7, (Z0 + Z1) / 2], cast: false });
+const hotMat = new THREE.MeshStandardMaterial({ color: 0x220806, emissive: 0xff4a1a, emissiveIntensity: 1.6, metalness: .5, roughness: .4 });
+for (let k = 0; k < 7; k++) add(room, new THREE.CylinderGeometry(.18 + (k % 3) * .06, .18 + (k % 3) * .06, Z0 - Z1, 14), k % 3 === 0 ? hotMat : mat.pipe, { r: [Math.PI / 2, 0, 0], p: [-3 + k * 1, -6.6 + (k % 2) * .5, (Z0 + Z1) / 2], cast: false });
+const pitLight = new THREE.PointLight(0xff5a20, 60, 30, 1.6); pitLight.position.set(0, -4.5, -10); scene.add(pitLight);
+// vigas que sostienen la pasarela
+for (let z = Z0 - 1; z > Z1; z -= 4.5) { add(room, new THREE.BoxGeometry(HW * 2, .3, .3), mat.steel, { p: [0, -.25, z], cast: false }); for (const s of [-1, 1]) add(room, new THREE.BoxGeometry(.35, 7, .35), mat.steel, { p: [s * 2.4, -3.7, z], cast: false }); }
 
-// haces de luz volumétricos
+// armarios de servidores (instanciados) con luces de estado
+const rackFront = canvasTex(256, 512, (g) => {
+  g.fillStyle = "#0b0a10"; g.fillRect(0, 0, 256, 512);
+  for (let u = 0; u < 22; u++) {
+    const y = 14 + u * 22; g.fillStyle = u % 5 === 0 ? "#16141d" : "#121018"; g.fillRect(10, y, 236, 19);
+    g.fillStyle = "#06050a"; for (let k = 0; k < 18; k++) g.fillRect(70 + k * 9, y + 5, 5, 9);
+    for (let k = 0; k < 4; k++) { const on = Math.random() < .55; g.fillStyle = on ? (Math.random() < .8 ? "#b46bff" : "#ff4fd8") : "#1d1426"; g.fillRect(18 + k * 10, y + 7, 5, 5); }
+  }
+  g.strokeStyle = "#24212c"; g.lineWidth = 6; g.strokeRect(3, 3, 250, 506);
+}, null);
+const rackEmis = canvasTex(256, 512, (g) => { g.fillStyle = "#000"; g.fillRect(0, 0, 256, 512); for (let u = 0; u < 22; u++) for (let k = 0; k < 4; k++) if (Math.random() < .55) { g.fillStyle = Math.random() < .8 ? "#b46bff" : "#ff4fd8"; g.fillRect(18 + k * 10, 14 + u * 22 + 7, 5, 5); } }, null);
+const rackSide = new THREE.MeshStandardMaterial({ ...wornPlate, color: 0x3a3842, metalness: .7, roughness: .6 });
+const rackFaceMat = new THREE.MeshStandardMaterial({ map: rackFront, emissiveMap: rackEmis, emissive: 0xffffff, emissiveIntensity: 2.2, metalness: .5, roughness: .5 });
+const rackGeo = new THREE.BoxGeometry(.75, 2.5, 1.1);
+const rackPos = [];
+for (let z = Z0 - .5; z > Z1; z -= .8) for (const s of [-1, 1]) { rackPos.push([s * 2.35, 1.25, z, s]); if (Math.random() < .85) rackPos.push([s * 4.2, 4.6, z, s]); rackPos.push([s * 6.4, -2, z, s]); }
+for (const facing of [-1, 1]) {
+  const list = rackPos.filter((r) => r[3] === facing);
+  // cara frontal (+x o -x) hacia el pasillo
+  const mats = [rackSide, rackSide, rackSide, rackSide, rackSide, rackSide]; mats[facing > 0 ? 1 : 0] = rackFaceMat;
+  const inst = new THREE.InstancedMesh(rackGeo, mats, list.length); const m4 = new THREE.Matrix4();
+  list.forEach(([x, y, z], i) => { m4.makeTranslation(x, y, z); inst.setMatrixAt(i, m4); });
+  inst.receiveShadow = true; room.add(inst);
+}
+// pasarelas altas laterales
+for (const s of [-1, 1]) { add(room, new THREE.PlaneGeometry(2.4, Z0 - Z1), grate, { r: [-Math.PI / 2, 0, 0], p: [s * 4.2, 3.32, (Z0 + Z1) / 2], cast: false }); add(room, new THREE.BoxGeometry(.05, .05, Z0 - Z1), mat.steel, { p: [s * 3, 4.3, (Z0 + Z1) / 2], cast: false }); }
+
+// muros lejanos con ventanales altos
+const wallFar = new THREE.MeshStandardMaterial({ color: 0x15121b, metalness: .4, roughness: .8 });
+const windowMat = new THREE.MeshStandardMaterial({ color: 0, emissive: 0xa77bff, emissiveIntensity: 2.4 });
+for (const s of [-1, 1]) {
+  add(room, new THREE.PlaneGeometry(Z0 - Z1, HH + 8), wallFar, { r: [0, -s * Math.PI / 2, 0], p: [s * HW, HH / 2 - 4, (Z0 + Z1) / 2], cast: false });
+  for (let z = -2; z > Z1; z -= 7) for (let c = 0; c < 3; c++) for (let r = 0; r < 2; r++)
+    add(room, new THREE.PlaneGeometry(.9, 1.3), windowMat, { r: [0, -s * Math.PI / 2, 0], p: [s * (HW - .02), 9.5 + r * 1.5, z - c * 1.05], cast: false, recv: false });
+}
+add(room, new THREE.PlaneGeometry(HW * 2, HH + 8), wallFar, { p: [0, HH / 2 - 4, Z1], cast: false });
+for (let c = 0; c < 4; c++) add(room, new THREE.PlaneGeometry(1.2, 4), windowMat, { p: [-2.1 + c * 1.4, 7, Z1 + .05], cast: false, recv: false });
+
+// cerchas del techo y grúas puente
+for (let z = Z0; z > Z1; z -= 5) {
+  add(room, new THREE.BoxGeometry(HW * 2, .5, .4), mat.steel, { p: [0, HH - 1, z], cast: false });
+  for (let x = -HW; x < HW; x += 2) { const d = add(room, new THREE.BoxGeometry(.12, 2.6, .12), mat.steel, { p: [x + 1, HH - 2.2, z], cast: false }); d.rotation.z = (x / 2) % 2 ? .6 : -.6; }
+  add(room, new THREE.BoxGeometry(HW * 2, .25, .3), mat.steel, { p: [0, HH - 3.3, z], cast: false });
+}
+for (const x of [-3.2, 3.2]) { add(room, new THREE.BoxGeometry(.6, .9, Z0 - Z1), mat.steel, { p: [x, 8.2, (Z0 + Z1) / 2], cast: false }); }
+for (const [z, x] of [[-8, 0], [-19, -1], [-31, .8]]) { const cr = new THREE.Group(); cr.position.set(x, 7.4, z); room.add(cr); add(cr, new THREE.BoxGeometry(6.6, .7, .9), mat.gun, { cast: false }); add(cr, new THREE.BoxGeometry(1, 1, 1.2), mat.plate, { p: [0, -.8, 0], cast: false }); add(cr, new THREE.CylinderGeometry(.03, .03, 3, 6), mat.dark, { p: [0, -2.8, 0], cast: false }); add(cr, new THREE.BoxGeometry(.4, .3, .4), mat.steel, { p: [0, -4.3, 0], cast: false }); }
+// gran viga de la grúa de Vera
+add(room, new THREE.BoxGeometry(HW * 2, .55, .7), mat.gun, { p: [0, RH + .25, 0], cast: false });
+
+// mazos de cables colgando entre cerchas
+const cableDark = new THREE.MeshStandardMaterial({ color: 0x0d0c10, metalness: .3, roughness: .7 });
+for (let i = 0; i < 46; i++) {
+  const z = rnd(Z1 + 4, Z0 - 1), x0 = rnd(-HW + 1, HW - 1), x1 = x0 + rnd(-3, 3), y0 = HH - rnd(3.2, 4), sag = rnd(1.5, 5.5);
+  const pts = []; for (let k = 0; k <= 12; k++) { const t = k / 12; pts.push(new THREE.Vector3(mix(x0, x1, t), y0 - Math.sin(Math.PI * t) * sag, z + Math.sin(t * 3) * .3)); }
+  add(room, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, rnd(.02, .06), 6, false), cableDark, { cast: false });
+}
+for (let i = 0; i < 18; i++) { const x = rnd(-3, 3), z = rnd(Z1 + 5, -3), len = rnd(4, 9); add(room, new THREE.CylinderGeometry(.025, .025, len, 6), cableDark, { p: [x, HH - 3.3 - len / 2, z], cast: false }); }
+
+// haces de luz desde los ventanales (inclinados)
 const shaftMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-  uniforms: { uColor: { value: new THREE.Color(0x9c84ff) }, uI: { value: .07 } },
+  uniforms: { uColor: { value: new THREE.Color(0x9c7cff) }, uI: { value: .09 } },
   vertexShader: "varying float vY; varying vec3 vN; varying vec3 vV; void main(){ vY = uv.y; vec4 mv = modelViewMatrix*vec4(position,1.); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }",
-  fragmentShader: "uniform vec3 uColor; uniform float uI; varying float vY; varying vec3 vN; varying vec3 vV; void main(){ float edge = pow(abs(dot(vN,vV)),1.6); gl_FragColor = vec4(uColor, uI*vY*vY*edge); }",
+  fragmentShader: "uniform vec3 uColor; uniform float uI; varying float vY; varying vec3 vN; varying vec3 vV; void main(){ float edge = pow(abs(dot(vN,vV)),1.4); gl_FragColor = vec4(uColor, uI*pow(vY,1.5)*edge); }",
 });
-for (let z = -4.5; z > -30; z -= 6) { const sh = new THREE.Mesh(new THREE.CylinderGeometry(.35, 1.7, RH - .3, 32, 1, true), shaftMat); sh.position.set(0, (RH - .3) / 2, z); room.add(sh); }
+for (let z = -4; z > Z1 + 4; z -= 7) for (const s of [-1, 1]) {
+  if (Math.random() < .35) continue;
+  const sh = new THREE.Mesh(new THREE.CylinderGeometry(.5, 2.2, 13, 24, 1, true), shaftMat);
+  sh.position.set(s * 5.5, 4.5, z); sh.rotation.z = s * .55; room.add(sh);
+}
+const centerShaft = new THREE.Mesh(new THREE.CylinderGeometry(.8, 3, 12, 24, 1, true), shaftMat); centerShaft.position.set(0, 5, Z1 + 3); room.add(centerShaft);
 
 // polvo en suspensión
-const dustN = 420, dustGeo = new THREE.BufferGeometry(), dustPos = new Float32Array(dustN * 3), dustVel = [];
-for (let i = 0; i < dustN; i++) { dustPos.set([rnd(-RW, RW), rnd(0, RH), rnd(-22, 3)], i * 3); dustVel.push([rnd(-.02, .02), rnd(-.015, .03), rnd(-.02, .02)]); }
+const dustN = 700, dustGeo = new THREE.BufferGeometry(), dustPos = new Float32Array(dustN * 3), dustVel = [];
+for (let i = 0; i < dustN; i++) { dustPos.set([rnd(-6, 6), rnd(-1, 10), rnd(-26, 3)], i * 3); dustVel.push([rnd(-.02, .02), rnd(-.015, .03), rnd(-.02, .02)]); }
 dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3));
 const dot = canvasTex(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, "rgba(255,255,255,1)"); r.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
-const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: .035, map: dot, color: 0xc9b8ff, transparent: true, opacity: .4, depthWrite: false, blending: THREE.AdditiveBlending }));
+const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: .04, map: dot, color: 0xd2c2ff, transparent: true, opacity: .45, depthWrite: false, blending: THREE.AdditiveBlending }));
 scene.add(dust);
 
-// ---------- Niebla volumétrica violeta / turquesa y cerchas del techo ----------
+// niebla violeta a capas
 const puff = canvasTex(256, 256, (g) => { for (let i = 0; i < 14; i++) { const x = 128 + rnd(-50, 50), y = 128 + rnd(-50, 50), r = rnd(50, 110), gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, "rgba(255,255,255,.22)"); gr.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); } });
 const hazes = [];
-[[0x9a4dff, -2.6, 1.6, -3, 6], [0x7a3cff, -3.2, 2.8, -9, 8], [0x2fd6c8, 2.8, 2.2, -4, 6], [0x23b8b0, 3.4, 1.4, -11, 9], [0xb050ff, -1, 3.6, -16, 10], [0x2ac9c0, 1.5, 3.3, -20, 11]].forEach(([c, x, y, z, sz]) => {
+[[0x8a4dff, -3, 2, -6, 9], [0x6a3cff, 3, 3, -12, 11], [0xb050ff, 0, 6, -22, 16], [0x7a40ff, -2, -1.5, -10, 10], [0xff5030, 0, -5, -14, 14], [0x9a5cff, 2, 9, -30, 18]].forEach(([c, x, y, z, sz]) => {
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, color: c, transparent: true, opacity: .22, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
   sp.position.set(x, y, z); sp.scale.set(sz, sz * .7, 1); scene.add(sp); hazes.push({ sp, x, y, ph: Math.random() * 6 });
 });
-const truss = new THREE.Group(); scene.add(truss);
-for (let z = 2.5; z > -30; z -= 6) {
-  for (const s2 of [-1, 1]) {
-    const b = add(truss, new THREE.BoxGeometry(.12, .12, Math.hypot(RW, 1.2)), mat.steel, { cast: false });
-    b.position.set(s2 * RW / 2, RH - .55, z - 1.5); b.rotation.y = s2 * Math.atan2(RW, 3) ; b.rotation.x = .06;
-  }
-  add(truss, new THREE.BoxGeometry(RW * 2, .16, .16), mat.steel, { p: [0, RH - .7, z], cast: false });
-  for (let k = 0; k < 3; k++) add(truss, new THREE.CylinderGeometry(.035, .035, 3, 8), mat.rubber, { r: [Math.PI / 2, 0, 0], p: [-1.2 + k * .14, RH - .82 - k * .04, z - 1.5], cast: false });
-}
-const teal = new THREE.PointLight(0x2fe0d0, 14, 16, 1.8); teal.position.set(3, 2.4, -6); scene.add(teal);
-const violet = new THREE.PointLight(0x9a4dff, 12, 16, 1.8); violet.position.set(-3, 2.2, -4); scene.add(violet);
+const violet = new THREE.DirectionalLight(0x9a6cff, 1.6); violet.position.set(-8, 12, -10); scene.add(violet);
+const teal = new THREE.PointLight(0xb46bff, 10, 18, 1.8); teal.position.set(2.4, 3, -7); scene.add(teal);
 
 // ---------- Luces ----------
 scene.add(new THREE.HemisphereLight(0x8a8494, 0x090610, .18));
-const key = new THREE.SpotLight(0xf2ece4, 11, 14, .45, .8, 1.6); key.position.set(1.8, 4.1, 3.2); key.target.position.set(.8, 1.6, 0);
+const key = new THREE.SpotLight(0xf2ece4, 9, 12, .26, .7, 1.6); key.position.set(1.6, 2.9, 3.6); key.target.position.set(.9, 1.4, 0);
 key.castShadow = true; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -.0004; key.shadow.radius = 4; scene.add(key, key.target);
 const rim = new THREE.DirectionalLight(0x7050ff, .9); rim.position.set(-2, 3, -6); scene.add(rim);
-const deepA = new THREE.PointLight(0xff3fd0, 14, 14, 1.8); deepA.position.set(-2.5, 2.4, -9); scene.add(deepA);
-const deepB = new THREE.PointLight(0x7a4dff, 18, 16, 1.8); deepB.position.set(2.2, 2.6, -18); scene.add(deepB);
+
+const deepB = new THREE.PointLight(0x7a4dff, 14, 22, 1.8); deepB.position.set(2.2, 2.6, -18); scene.add(deepB);
 const eyeLight = new THREE.PointLight(0xff4fd8, 8, 7, 1.8); scene.add(eyeLight);
 
 // ---------- Raíl y carro ----------
 const rail = new THREE.Group(); scene.add(rail);
-add(rail, new THREE.BoxGeometry(RW * 2, .05, .34), mat.chrome, { p: [0, G.railY + .2, 0], cast: false });
+add(rail, new THREE.BoxGeometry(RW * 2, .05, .34), mat.steel, { p: [0, G.railY + .2, 0], cast: false });
 add(rail, new THREE.BoxGeometry(RW * 2, .3, .06), mat.steel, { p: [0, G.railY + .05, 0], cast: false });
-add(rail, new THREE.BoxGeometry(RW * 2, .05, .34), mat.chrome, { p: [0, G.railY - .1, 0], cast: false });
+add(rail, new THREE.BoxGeometry(RW * 2, .05, .34), mat.steel, { p: [0, G.railY - .1, 0], cast: false });
 add(rail, new THREE.BoxGeometry(RW * 2, .012, .015), stripMats[0], { p: [0, G.railY + .05, .035], cast: false, recv: false });
 for (let x = -3.6; x <= 3.6; x += 1.8) add(rail, new THREE.BoxGeometry(.08, RH - G.railY - .2, .08), mat.steel, { p: [x, (RH + G.railY + .2) / 2, 0], cast: false });
 
@@ -424,7 +478,7 @@ for (const sgn of [-1, 1]) for (let i = 0; i < 5; i++) {
 }
 // casquillos donde se enchufan los cables de datos (parte alta y trasera)
 const plugs = [];
-for (const [ax, ay] of [[-.55, .55], [0, .72], [.55, .55], [-.3, .3]]) {
+for (const [ax, ay] of [[-.55, .55], [0, .72], [.55, .55], [-.3, .3], [.3, .85], [-.25, .9], [.62, .2], [0, .4]]) {
   const dir = new THREE.Vector3(ax, ay, -.62).normalize(), pos = dir.clone().multiplyScalar(R * 1.0);
   const plug = new THREE.Group(); plug.position.copy(pos); plug.lookAt(pos.clone().multiplyScalar(2)); head.add(plug);
   add(plug, new THREE.CylinderGeometry(.034, .04, .05, 16), mat.plate, { r: [Math.PI / 2, 0, 0], p: [0, 0, .01] });
@@ -449,16 +503,17 @@ const dome = add(head, new THREE.SphereGeometry(domeR, 64, 16, 0, Math.PI * 2, 0
 dome.renderOrder = 2;
 
 // ---------- Cables de datos (se recalculan cada fotograma) ----------
-const dataCables = plugs.map((_, i) => { const me = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: i === 1 ? 0x1c1a1c : 0x242123, metalness: .2, roughness: .75 })); me.castShadow = true; scene.add(me); return me; });
+const dataCables = plugs.map((_, i) => { const me = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: [0x1c1a1c, 0x242123, 0x15131a, 0x2a2622][i % 4], metalness: .25, roughness: .7 })); me.castShadow = true; scene.add(me); return me; });
 const cableA = new THREE.Vector3(), cableB = new THREE.Vector3(), cableM = new THREE.Vector3();
 function updateCables() {
   plugs.forEach((plug, i) => {
-    fore.localToWorld(cableA.set((i - 1.5) * .03, -G.L2 * (.15 + i * .1), .07 * (i % 2 ? 1 : -1)));
+    if (i < 4) fore.localToWorld(cableA.set((i - 1.5) * .03, -G.L2 * (.15 + i * .1), .07 * (i % 2 ? 1 : -1)));
+    else trolley.localToWorld(cableA.set((i - 5.5) * .12, G.railY - .42, .22 * (i % 2 ? 1 : -1))); // mazo que baja desde el techo
     plug.getWorldPosition(cableB);
-    const mid = cableM.copy(cableA).lerp(cableB, .5); mid.y -= .12 + i * .03; mid.z -= .12;
+    const mid = cableM.copy(cableA).lerp(cableB, .5); mid.y -= i < 4 ? .12 + i * .03 : .35 + (i % 3) * .12; mid.z -= i < 4 ? .12 : .25 + (i % 2) * .15;
     const back = cableB.clone().add(plug.getWorldDirection(new THREE.Vector3()).multiplyScalar(.14));
     const curve = new THREE.CatmullRomCurve3([cableA.clone(), mid.clone(), back, cableB.clone()]);
-    dataCables[i].geometry.dispose(); dataCables[i].geometry = new THREE.TubeGeometry(curve, 24, i === 1 ? .02 : .014, 6, false);
+    dataCables[i].geometry.dispose(); dataCables[i].geometry = new THREE.TubeGeometry(curve, 28, i === 1 || i === 5 ? .024 : .016, 7, false);
   });
 }
 
@@ -571,7 +626,7 @@ function update(dt) {
   for (const k2 in P) if (typeof P[k2] === "number" && !Number.isFinite(P[k2])) P[k2] = 0;
 
   // polvo
-  for (let i = 0; i < dustN; i++) { const v = dustVel[i]; dustPos[i * 3] += v[0] * dt; dustPos[i * 3 + 1] += (v[1] + Math.sin(clock * .3 + i) * .01) * dt; dustPos[i * 3 + 2] += v[2] * dt; if (dustPos[i * 3 + 1] > RH) dustPos[i * 3 + 1] = 0; if (dustPos[i * 3 + 1] < 0) dustPos[i * 3 + 1] = RH; }
+  for (let i = 0; i < dustN; i++) { const v = dustVel[i]; dustPos[i * 3] += v[0] * dt; dustPos[i * 3 + 1] += (v[1] + Math.sin(clock * .3 + i) * .01) * dt; dustPos[i * 3 + 2] += v[2] * dt; if (dustPos[i * 3 + 1] > 10) dustPos[i * 3 + 1] = -1; if (dustPos[i * 3 + 1] < -1) dustPos[i * 3 + 1] = 10; }
   dustGeo.attributes.position.needsUpdate = true;
   hazes.forEach((h) => { h.sp.position.x = h.x + Math.sin(clock * .07 + h.ph) * .5; h.sp.material.opacity = .18 + .06 * Math.sin(clock * .11 + h.ph); });
 }
