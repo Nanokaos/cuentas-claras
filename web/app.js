@@ -4,6 +4,7 @@ import * as Voice from "./voice.js";
 import * as AI from "./ai.js";
 import * as Importer from "./importer.js";
 import * as Daily from "./daily.js";
+import * as Converse from "./converse.js";
 
 const ME = "yo";
 const $ = (s, r = document) => r.querySelector(s);
@@ -280,6 +281,7 @@ function settings() {
   <section class="card form"><h3>Asistente</h3>
     <label>Sarcasmo: <b id="sarcLbl">${["Neutra", "Irónica", "Sarcástica", "Despiadada", "Cruel"][s.sarcasm]}</b><input type="range" min="0" max="4" step="1" id="sSarc" value="${s.sarcasm}"></label>
     <label class="sw"><span>Vera habla en voz alta${Voice.canSpeak() ? "" : "<small>Este navegador no tiene voz.</small>"}</span><input type="checkbox" id="sVoice" ${s.voice ? "checked" : ""}></label>
+    <label class="sw"><span>Micro en modo conversación<small>Queda abierto como una llamada: hablas, Vera responde y puedes cortarla hablando. Necesita la clave de Groq.</small></span><input type="checkbox" id="sConv" ${s.micMode !== "single" ? "checked" : ""}></label>
     <label class="sw"><span>Comentarios espontáneos</span><input type="checkbox" id="sRem" ${s.remarks ? "checked" : ""}></label>
     <label class="sw"><span>Reducir movimiento</span><input type="checkbox" id="sRm" ${s.reduceMotion ? "checked" : ""}></label>
     <label class="sw"><span>Ahorro de batería (3D sencillo)</span><input type="checkbox" id="sLow" ${s.quality === "baja" ? "checked" : ""}></label></section>
@@ -312,7 +314,7 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.01k · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.02a · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -415,12 +417,34 @@ function showDrafts() {
   });
 }
 let micBusy = false, micStarted = 0;
-function micUi(on) {
-  micBusy = on; document.body.classList.toggle("listening", on);
+function micUi(on, conv = false) {
+  micBusy = on; document.body.classList.toggle("listening", on); document.body.classList.toggle("conv", on && conv);
   const b = $("#mic"); b.classList.toggle("live", on); b.setAttribute("aria-pressed", on); b.setAttribute("aria-label", on ? "Cerrar el micrófono" : "Hablar con Vera");
-  $("#listenBar").hidden = !on; if (on) $("#listenText").textContent = "Te escucho…";
+  $("#listenBar").hidden = !on; if (on) $("#listenText").textContent = conv ? CONV_LABEL.escuchando : "Te escucho…";
+  $("#listenBar small").textContent = conv ? "Toca para colgar" : "Toca para cerrar";
+}
+const convAvailable = () => db.settings.micMode !== "single" && !!(db.settings.groqKey || db.settings.proxy) && !!navigator.mediaDevices?.getUserMedia;
+const CONV_LABEL = { escuchando: "Conversación abierta: habla cuando quieras", oyendo: "Te oigo…", transcribiendo: "Entendiendo…" };
+async function conversation() {
+  if (Converse.active()) { Converse.stop(); return; }
+  Voice.unlockVoice(); micStarted = performance.now(); micUi(true, true);
+  try {
+    await Converse.start({ key: db.settings.groqKey, proxy: db.settings.proxy,
+      onText: (text) => { $("#listenText").textContent = "«" + text + "»"; ask(text); },
+      onLevel: (lv) => $("#listenBar").style.setProperty("--lv", lv.toFixed(2)),
+      onError: (msg) => toast(msg),
+      onState: (stt) => {
+        if (stt === "cerrado") { micUi(false); vera((v) => { v.setState("reposo"); v.show("Conversación cerrada."); setTimeout(() => v.hide(), 1500); }); return; }
+        if ($("#listenText") && stt !== "escuchando") $("#listenText").textContent = CONV_LABEL[stt];
+        if (stt === "escuchando" && !busy && !Voice.isSpeaking()) { $("#listenText").textContent = CONV_LABEL.escuchando; vera((v) => v.setState("escucha")); }
+        if (stt === "oyendo" && !Voice.isSpeaking()) vera((v) => { v.setState("escucha"); v.show("Te oigo…"); });
+      } });
+    if (!Converse.active()) return;
+    vera((v) => { v.setState("escucha"); v.show("Te escucho. Toca el micro para colgar."); });
+  } catch (err) { micUi(false); talk(err.message, "neutral"); }
 }
 async function dictate() {
+  if (convAvailable() || Converse.active()) return conversation();
   if (micBusy) { // segundo toque: cerrar el micro (se ignora un doble toque accidental)
     if (performance.now() - micStarted < 450) return;
     Voice.listen.abort?.(); micUi(false); vera((v) => { v.setState("reposo"); v.show("Micro cerrado."); setTimeout(() => v.hide(), 1500); }); return;
@@ -473,6 +497,7 @@ document.addEventListener("input", (e) => {
 });
 document.addEventListener("change", (e) => {
   const id = e.target.id;
+  if (id === "sConv") { db.settings.micMode = e.target.checked ? "conv" : "single"; save(); if (!e.target.checked) Converse.stop(); return; }
   if (id === "sRem") { db.settings.remarks = e.target.checked; save(); configVera(); }
   if (id === "sRobot") { db.settings.robot = +e.target.value; $("#robotLbl").textContent = e.target.value + "%"; voiceCfg(); save(); return; }
   if (id === "sDaily") return void enableDaily(e.target.checked);
@@ -838,16 +863,16 @@ document.addEventListener("click", (e) => {
   save(); renderChat();
 });
 
-let busy = false;
+let busy = false, pendingAsk = null;
 async function ask(text) {
   db.chat.push({ role: "user", text, at: C.nowLocal() }); save(); renderChat();
   const s = db.settings;
   if (!s.groqKey && !s.proxy) return localAsk(text);
-  if (busy) return toast("Un momento, sigo pensando la respuesta anterior.");
+  if (busy) { if (Converse.active()) { pendingAsk = text; return; } return toast("Un momento, sigo pensando la respuesta anterior."); }
   busy = true; vera((v) => { v.setState("pensando"); v.show("Pensando…"); });
   try { await aiAsk(text); }
   catch (err) { vera((v) => v.setState("reposo")); talk(err.message + (err.code === "limit" || err.code === "network" ? " Mientras, lo intento sin IA." : ""), "neutral", "habla"); if (err.code === "limit" || err.code === "network") localAsk(text, true); }
-  finally { busy = false; }
+  finally { busy = false; if (pendingAsk) { const t = pendingAsk; pendingAsk = null; ask(t); } }
 }
 
 /** Conversación con la IA: hasta 3 rondas de herramientas; los cambios quedan pendientes de confirmar. */

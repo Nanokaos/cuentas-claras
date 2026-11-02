@@ -154,7 +154,7 @@ export async function chat({ key, proxy, models, messages, tools }) {
       res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
-        body: JSON.stringify({ model, messages, ...(tools?.length ? { tools, tool_choice: "auto" } : {}), temperature: .4, max_tokens: 900 }),
+        body: JSON.stringify({ model, messages, ...(tools?.length ? { tools, tool_choice: "auto" } : {}), ...(/gpt-oss/.test(model) ? { reasoning_effort: "low" } : {}), temperature: .4, max_tokens: 900 }),
       });
     } catch (e) {
       throw new AiError("network", proxy ? "No puedo contactar con tu intermediario. Revisa la dirección en Ajustes." : "El navegador ha bloqueado la conexión directa con Groq. Configura el intermediario gratuito (Ajustes → Inteligencia artificial) o revisa tu conexión.");

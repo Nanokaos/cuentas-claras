@@ -11,8 +11,13 @@ export default {
     const cors = { "Access-Control-Allow-Origin": ALLOWED_ORIGIN, "Access-Control-Allow-Headers": "Content-Type, Authorization, model", "Access-Control-Allow-Methods": "POST, OPTIONS" };
     if (req.method === "OPTIONS") return new Response(null, { headers: cors });
     const url = new URL(req.url);
-    if (req.method !== "POST" || !["/chat", "/fish"].includes(url.pathname)) return new Response("No encontrado", { status: 404, headers: cors });
+    if (req.method !== "POST" || !["/chat", "/fish", "/stt"].includes(url.pathname)) return new Response("No encontrado", { status: 404, headers: cors });
     if (req.headers.get("Origin") !== ALLOWED_ORIGIN) return new Response("Origen no permitido", { status: 403, headers: cors });
+    if (url.pathname === "/stt") { // transcripción (multipart): se reenvía tal cual a Groq
+      const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", { method: "POST",
+        headers: { "Content-Type": req.headers.get("Content-Type") || "", Authorization: env.GROQ_API_KEY ? `Bearer ${env.GROQ_API_KEY}` : req.headers.get("Authorization") || "" }, body: req.body });
+      return new Response(r.body, { status: r.status, headers: { ...cors, "Content-Type": "application/json" } });
+    }
     const body = await req.text();
     if (body.length > 60000) return new Response("Petición demasiado grande", { status: 413, headers: cors });
 

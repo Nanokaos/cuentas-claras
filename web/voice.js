@@ -49,7 +49,7 @@ async function fishAudio(text, signal) {
   let r;
   try {
     r = await fetch(url, { method: "POST", signal, headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.fishKey}`, model: "s2.1-pro-free" },
-      body: JSON.stringify({ text, reference_id: cfg.fishVoice, format: "mp3", mp3_bitrate: 64, latency: "balanced", normalize: true, language: "es" }) });
+      body: JSON.stringify({ text, reference_id: cfg.fishVoice, format: "mp3", mp3_bitrate: 64, latency: "low", normalize: true, language: "es" }) });
   } catch (err) {
     if (err.name === "AbortError") throw err;
     throw Object.assign(new Error(cfg.proxy ? "No puedo contactar con el intermediario. Revisa la dirección y que el worker esté desplegado." : "El navegador ha bloqueado la conexión directa con Fish Audio. Hace falta el intermediario gratuito de Cloudflare: pon su dirección en «Intermediario»."), { soft: true });
@@ -67,7 +67,7 @@ async function fishAudio(text, signal) {
 /** Cadena de efectos: un toque metálico (eco corto con realimentación) y modulación en anillo suave. */
 function chain(ac, src, amount) {
   const out = ac.createGain(); out.gain.value = 1;
-  if (!amount) { src.connect(out); out.connect(ac.destination); return; }
+  if (!amount) { src.connect(out); out.connect(master(ac)); return; }
   const a = amount / 100;
   const dry = ac.createGain(); dry.gain.value = 1 - a * .45;
   const delay = ac.createDelay(); delay.delayTime.value = .011;
@@ -81,20 +81,52 @@ function chain(ac, src, amount) {
   src.connect(dry); dry.connect(hp);
   src.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(hp);
   src.connect(ring); ring.connect(ringOut); ringOut.connect(hp);
-  hp.connect(out); out.connect(ac.destination);
+  hp.connect(out); out.connect(master(ac));
   src.onended = () => { try { osc.stop(); } catch {} };
 }
 
+// Salida común con volumen para poder «bajar la voz» cuando el usuario empieza a hablar.
+let masterNode = null;
+function master(ac) { if (!masterNode) { masterNode = ac.createGain(); masterNode.connect(ac.destination); } return masterNode; }
+/** Baja (o recupera) el volumen de Vera mientras se comprueba si la están interrumpiendo. */
+export function duck(on) {
+  if (masterNode && ctx) masterNode.gain.setTargetAtTime(on ? .12 : 1, ctx.currentTime, .04);
+  if (!masterNode && synth?.speaking) { try { on ? synth.pause() : synth.resume(); } catch {} }
+}
+let speaking = false, speakingText = "";
+export const isSpeaking = () => speaking;
+export const spokenText = () => speakingText;
+
+/** Trocea en frases: la primera corta para empezar a hablar cuanto antes. */
+function chunks(text) {
+  const parts = text.match(/[^.!?…;:]+[.!?…;:]*\s*/g) || [text], out = [];
+  for (const p of parts) { const last = out.length - 1; if (last >= 0 && (out[last].length < (last === 0 ? 25 : 90))) out[last] += p; else out.push(p); }
+  return out.map((x) => x.trim()).filter(Boolean);
+}
+
 async function sayFish(clean, onState) {
-  aborter?.abort(); aborter = new AbortController();
+  aborter?.abort(); aborter = new AbortController(); const signal = aborter.signal;
   const ac = audioCtx(); if (!ac) throw new Error("Este navegador no reproduce audio.");
   if (ac.state === "suspended") await ac.resume().catch(() => {});
-  const buf = await fishAudio(clean, aborter.signal);
-  const data = await ac.decodeAudioData(buf);
-  stopCurrent();
-  const src = ac.createBufferSource(); src.buffer = data; chain(ac, src, cfg.robot);
-  current = src; fishState.ok = true; fishState.error = "";
-  return new Promise((resolve) => { src.onended = ((prev) => () => { prev?.(); if (current === src) current = null; onState?.(false); resolve(); })(src.onended); onState?.(true); src.start(); });
+  masterNode?.gain.setValueAtTime(1, ac.currentTime);
+  // Se piden todas las frases a la vez y se reproducen en orden según llegan.
+  const list = chunks(clean), jobs = list.map((t) => fishAudio(t, signal).then((b) => ac.decodeAudioData(b)));
+  jobs.forEach((j) => j.catch(() => {}));
+  const first = await jobs[0]; // si la primera falla, salta a la voz del móvil
+  stopCurrent(); speaking = true; speakingText = clean; onState?.(true);
+  fishState.ok = true; fishState.error = "";
+  try {
+    for (let k = 0; k < jobs.length; k++) {
+      if (signal.aborted) break;
+      let data; try { data = k ? await jobs[k] : first; } catch (err) { if (err.name === "AbortError") break; continue; }
+      if (signal.aborted) break;
+      await new Promise((resolve) => {
+        const src = ac.createBufferSource(); src.buffer = data; chain(ac, src, cfg.robot); current = src;
+        const prev = src.onended; src.onended = () => { prev?.(); if (current === src) current = null; resolve(); };
+        src.start();
+      });
+    }
+  } finally { speaking = false; speakingText = ""; onState?.(false); }
 }
 function stopCurrent() { if (current) { try { current.stop(); } catch {} current = null; } }
 
@@ -128,14 +160,14 @@ function saySystem(clean, { rate, pitch, onState }) {
     const u = new SpeechSynthesisUtterance(clean);
     const v = pickVoice(); if (v) u.voice = v;
     u.lang = v?.lang || "es-ES"; u.rate = rate; u.pitch = pitch;
-    u.onstart = () => onState?.(true);
-    u.onend = u.onerror = () => { onState?.(false); resolve(); };
+    u.onstart = () => { speaking = true; speakingText = clean; onState?.(true); };
+    u.onend = u.onerror = () => { speaking = false; speakingText = ""; onState?.(false); resolve(); };
     synth.speak(u);
     // Algunos Android se quedan colgados con textos largos: se reanuda si se pausa sola.
     const keep = setInterval(() => { if (!synth.speaking) clearInterval(keep); else if (synth.paused) synth.resume(); }, 4000);
   });
 }
-export const stopVoice = () => { aborter?.abort(); stopCurrent(); synth?.cancel(); };
+export const stopVoice = () => { aborter?.abort(); stopCurrent(); synth?.cancel(); speaking = false; speakingText = ""; if (masterNode && ctx) masterNode.gain.setValueAtTime(1, ctx.currentTime); };
 
 // ---------------- Dictado ----------------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;

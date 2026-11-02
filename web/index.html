@@ -184,6 +184,14 @@ body.tut main { padding-bottom: 300px; }
 .acchead-top small { display: block; color: var(--muted); font-size: 12px; }
 .acchead .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .acchead .actions .btn { padding: 9px 14px; font-size: 14px; }
+
+body.conv #listenBar { border-color: rgba(61,220,151,.8); box-shadow: 0 0 24px rgba(61,220,151,.45); }
+body.conv #listenBar .rec { background: #3ddc97; box-shadow: 0 0 10px #3ddc97; }
+body.conv #listenBar .eq i { background: #3ddc97; animation: none; transform: scaleY(calc(.2 + var(--lv, 0) * .8)); transition: transform .08s; }
+body.conv #listenBar .eq i:nth-child(2), body.conv #listenBar .eq i:nth-child(4) { transform: scaleY(calc(.15 + var(--lv, 0) * 1)); }
+body.conv #mic.live { background: radial-gradient(circle at 35% 30%, #9cf5cf, #22b37a 60%, #0f7a52); box-shadow: 0 0 0 4px rgba(61,220,151,.25), 0 0 28px rgba(61,220,151,.75); animation: micRingG 1.4s ease-out infinite; }
+@keyframes micRingG { 0% { box-shadow: 0 0 0 0 rgba(61,220,151,.7), 0 0 28px rgba(61,220,151,.75); } 100% { box-shadow: 0 0 0 18px rgba(61,220,151,0), 0 0 28px rgba(61,220,151,.75); } }
+body.conv #veraWrap::after { box-shadow: inset 0 0 0 2px rgba(61,220,151,.75), inset 0 0 70px rgba(61,220,151,.35); }
 </style>
 </head>
 <body>
