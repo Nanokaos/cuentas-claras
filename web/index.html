@@ -26,7 +26,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--body); font-size: 15px; -webkit-tap-highlight-color: transparent; }
-body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); max-width: 560px; margin: 0 auto; }
+body { padding-bottom: calc(112px + env(safe-area-inset-bottom)); max-width: 560px; margin: 0 auto; }
 button, input, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #veraWrap { position: relative; height: min(46vh, 340px); padding-top: env(safe-area-inset-top); background: #07050d; }
@@ -38,8 +38,8 @@ button, input, select { font: inherit; color: inherit; }
 #mic { background: radial-gradient(circle at 35% 30%, #ff8be8, #c22fb0 60%, #7b2bd0); box-shadow: 0 4px 18px rgba(255, 79, 216, .4); color: #fff; }
 #mic.live { animation: ring 1.2s ease-out infinite; }
 @keyframes ring { 0% { box-shadow: 0 0 0 0 rgba(80, 220, 255, .55); } 100% { box-shadow: 0 0 0 16px rgba(80, 220, 255, 0); } }
-#add, #chatBtn { background: var(--raise); border: 1px solid var(--line); font-size: 24px; position: relative; }
-#chatBtn.has::after { content: ""; position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+
 #quick .round { width: 44px; height: 44px; }
 #chat { height: 86vh; display: none; flex-direction: column; gap: 8px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 #chat[open] { display: flex; }
@@ -137,7 +137,7 @@ dialog::backdrop { background: rgba(5, 3, 10, .7); }
 .bz-h { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); } .bz-h b { color: var(--text, #fff); }
 
 #mic .i-stop { display: none; }
-#mic.live { background: radial-gradient(circle at 35% 30%, #ff9a9a, #ff2d55 60%, #b0123a); box-shadow: 0 0 0 4px rgba(255,45,85,.25), 0 0 28px rgba(255,45,85,.75); animation: micRing 1.1s ease-out infinite; transform: scale(1.08); }
+#micSlot #mic.live { background: radial-gradient(circle at 35% 30%, #ff9a9a, #ff2d55 60%, #b0123a); box-shadow: 0 0 0 4px rgba(255,45,85,.25), 0 0 28px rgba(255,45,85,.75); animation: micRing 1.1s ease-out infinite; transform: scale(1.08); }
 #mic.live .i-mic { display: none; } #mic.live .i-stop { display: block; }
 @keyframes micRing { 0% { box-shadow: 0 0 0 0 rgba(255,45,85,.7), 0 0 28px rgba(255,45,85,.75); } 100% { box-shadow: 0 0 0 18px rgba(255,45,85,0), 0 0 28px rgba(255,45,85,.75); } }
 #listenBar { position: fixed; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top)); z-index: 60; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px); padding: 10px 16px; border-radius: 999px; background: rgba(20,8,24,.92); border: 1px solid rgba(255,45,85,.7); box-shadow: 0 0 24px rgba(255,45,85,.45); color: #fff; font-size: 14px; cursor: pointer; backdrop-filter: blur(8px); }
@@ -189,29 +189,55 @@ body.conv #listenBar { border-color: rgba(61,220,151,.8); box-shadow: 0 0 24px r
 body.conv #listenBar .rec { background: #3ddc97; box-shadow: 0 0 10px #3ddc97; }
 body.conv #listenBar .eq i { background: #3ddc97; animation: none; transform: scaleY(calc(.2 + var(--lv, 0) * .8)); transition: transform .08s; }
 body.conv #listenBar .eq i:nth-child(2), body.conv #listenBar .eq i:nth-child(4) { transform: scaleY(calc(.15 + var(--lv, 0) * 1)); }
-body.conv #mic.live { background: radial-gradient(circle at 35% 30%, #9cf5cf, #22b37a 60%, #0f7a52); box-shadow: 0 0 0 4px rgba(61,220,151,.25), 0 0 28px rgba(61,220,151,.75); animation: micRingG 1.4s ease-out infinite; }
+body.conv #micSlot #mic.live { background: radial-gradient(circle at 35% 30%, #9cf5cf, #22b37a 60%, #0f7a52); box-shadow: 0 0 0 4px rgba(61,220,151,.25), 0 0 28px rgba(61,220,151,.75); animation: micRingG 1.4s ease-out infinite; }
 @keyframes micRingG { 0% { box-shadow: 0 0 0 0 rgba(61,220,151,.7), 0 0 28px rgba(61,220,151,.75); } 100% { box-shadow: 0 0 0 18px rgba(61,220,151,0), 0 0 28px rgba(61,220,151,.75); } }
 body.conv #veraWrap::after { box-shadow: inset 0 0 0 2px rgba(61,220,151,.75), inset 0 0 70px rgba(61,220,151,.35); }
+
+#quickForm { position: relative; }
+#quickText { padding-right: 58px; border-radius: 18px; padding-top: 13px; padding-bottom: 13px; font-size: 16px; }
+.qadd { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 12px; border: 1px solid rgba(180,140,255,.35); background: rgba(150,110,255,.22); color: #d9c8ff; font-size: 24px; line-height: 1; cursor: pointer; display: grid; place-items: center; }
+#chatHint { position: absolute; left: 12px; bottom: 10px; display: flex; gap: 6px; align-items: center; padding: 5px 10px; border-radius: 999px; background: rgba(10,6,18,.6); color: #cbb8e6; font-size: 11.5px; pointer-events: none; backdrop-filter: blur(4px); transition: opacity .6s; }
+#chatHint.off { opacity: 0; }
+.tabs { grid-template-columns: 1fr 1fr 84px 1fr 1fr !important; overflow: visible; padding-top: 8px; border-top: 0; background: #0f0c1a;
+  -webkit-mask: radial-gradient(circle 44px at 50% -6px, transparent 43px, #000 44px); mask: radial-gradient(circle 44px at 50% -6px, transparent 43px, #000 44px); }
+.tabs::before { content: ""; position: absolute; inset: 0; border-top: 1px solid var(--line); pointer-events: none; }
+#micSlot { position: fixed; z-index: 12; left: 0; right: 0; bottom: 0; height: 0; }
+#micSlot #mic { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(30px + env(safe-area-inset-bottom)); width: 68px; height: 68px; z-index: 12;
+  background: radial-gradient(circle at 35% 30%, #ff7fb0, #ff2d7a 55%, #c2185b); box-shadow: 0 0 0 6px #0d0a17, 0 0 26px rgba(255,45,122,.6); color: #fff; }
+#micSlot #mic.live { transform: translateX(-50%) scale(1.06) !important; }
+@media (min-width: 560px) { #micSlot #mic { left: 50%; } }
+.ticketbtn { align-self: flex-start; display: inline-flex; gap: 10px; align-items: center; padding: 12px 18px; border-radius: 999px; background: rgba(150,110,255,.16); border: 1px solid rgba(150,110,255,.35); color: #cdb8ff; font-weight: 600; cursor: pointer; }
+.ticketbtn svg { width: 22px; height: 22px; }
+.tk-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tk-pick label { display: grid; justify-items: center; gap: 8px; padding: 20px 10px; border-radius: 16px; background: var(--raise); border: 1px solid var(--line); cursor: pointer; font-weight: 600; text-align: center; }
+.tk-pick svg { width: 34px; height: 34px; color: #cdb8ff; }
+.tk-prev { width: 100%; max-height: 38vh; object-fit: contain; border-radius: 12px; background: #000; }
+.tk-scan { position: relative; overflow: hidden; border-radius: 12px; }
+.tk-scan::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, #ff4fd8, transparent); box-shadow: 0 0 14px #ff4fd8; animation: scan 1.6s ease-in-out infinite; }
+@keyframes scan { 0% { top: 0; } 50% { top: calc(100% - 3px); } 100% { top: 0; } }
+.tk-lines { font-size: 13px; color: var(--muted); max-height: 140px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.tk-lines div { display: flex; justify-content: space-between; gap: 10px; }
+.homeacts { display: flex; gap: 10px; flex-wrap: wrap; }
+.ticketbtn.ghost { background: var(--raise); border-color: var(--line); color: var(--text); font-weight: 500; }
 </style>
 </head>
 <body>
 <div id="intro" aria-hidden="true"><h1>VERANZA</h1><p>Finanzas bajo vigilancia</p><div class="boot"><i></i></div><small id="introMsg">Despertando a Vera…</small></div>
 <div id="listenBar" hidden role="status"><span class="rec"></span><span class="eq"><i></i><i></i><i></i><i></i><i></i></span><span id="listenText">Te escucho…</span><small>Toca para cerrar</small></div>
-<div id="veraWrap"><iframe id="vera" src="vera.html" title="Vera, la asistente" allow="autoplay"></iframe></div>
+<div id="veraWrap"><iframe id="vera" src="vera.html" title="Vera, la asistente" allow="autoplay"></iframe><span id="chatHint"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H9l-5 4z"/></svg>Toca la nave para escribir a Vera</span></div>
 <div id="quick">
-  <form id="quickForm"><input id="quickText" placeholder="«23 € en el súper con tarjeta»" autocomplete="off" enterkeyhint="send" aria-label="Escribe un gasto o ingreso"></form>
-  <button class="round" id="mic" aria-label="Hablar con Vera" aria-pressed="false"><svg class="i-mic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><svg class="i-stop" width="20" height="20" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg></button>
-  <button class="round" id="chatBtn" aria-label="Conversación con Vera"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 5h16v11H9l-5 4z"/></svg></button>
-  <button class="round" id="add" aria-label="Añadir movimiento">+</button>
+  <form id="quickForm"><input id="quickText" placeholder="23 € en el súper con tarjeta" autocomplete="off" enterkeyhint="send" aria-label="Escribe un gasto o ingreso">
+    <button type="button" class="qadd" id="add" aria-label="Añadir movimiento">+</button></form>
 </div>
 <main id="view"></main>
 <nav class="tabs" aria-label="Secciones">
   <a href="#inicio" data-tab="inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</a>
-  <a href="#movimientos" data-tab="movimientos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Movimientos</a>
-  <a href="#presupuestos" data-tab="presupuestos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/></svg>Presupuestos</a>
+  <a href="#movimientos" data-tab="movimientos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg>Movimientos</a>
+  <span class="micspace" aria-hidden="true"></span>
   <a href="#cuentas" data-tab="cuentas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 15h2"/></svg>Cuentas</a>
   <a href="#ajustes" data-tab="ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.6 15H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9.7 4V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z"/></svg>Ajustes</a>
 </nav>
+<div class="micslot" id="micSlot"><button class="round" id="mic" aria-label="Hablar con Vera" aria-pressed="false"><svg class="i-mic" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><svg class="i-stop" width="24" height="24" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg></button></div>
 <dialog id="chat" aria-label="Conversación con Vera">
   <div class="chat-h"><h3>Vera</h3><button class="link" id="chatClose">Cerrar</button></div>
   <div id="chatLog"></div>

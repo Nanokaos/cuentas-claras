@@ -19,7 +19,7 @@ export default {
       return new Response(r.body, { status: r.status, headers: { ...cors, "Content-Type": "application/json" } });
     }
     const body = await req.text();
-    if (body.length > 60000) return new Response("Petición demasiado grande", { status: 413, headers: cors });
+    if (body.length > 4000000) return new Response("Petición demasiado grande", { status: 413, headers: cors });
 
     if (url.pathname === "/fish") {
       const auth = env.FISH_API_KEY ? `Bearer ${env.FISH_API_KEY}` : req.headers.get("Authorization") || "";

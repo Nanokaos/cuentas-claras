@@ -5,6 +5,7 @@ import * as AI from "./ai.js";
 import * as Importer from "./importer.js";
 import * as Daily from "./daily.js";
 import * as Converse from "./converse.js";
+import * as Tickets from "./tickets.js";
 
 const ME = "yo";
 const $ = (s, r = document) => r.querySelector(s);
@@ -188,6 +189,7 @@ function home() {
   ${tasksCard()}
   ${r.warnings.length ? `<section class="card warn">${r.warnings.map((w) => `<p>${esc(w.message)}</p>`).join("")}</section>` : ""}
   ${catCard(r)}
+  <div class="homeacts"><button class="ticketbtn" data-act="ticket">${ICON_TICKET}Leer tickets</button><button class="ticketbtn ghost" data-act="go-budgets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/></svg>Presupuestos</button></div>
   <section class="card"><h3>Próximos recibos e ingresos</h3>
     ${upcoming.length ? upcoming.map((t) => { const st = C.effectiveStatus(t, S.now); return `<button class="row" data-edit="${t.id}"><span><b>${esc(t.concept || "Sin concepto")}</b><small class="${st === "PENDIENTE" ? "w" : ""}">${C.fmtDayLong(C.dateOf(t.dateTime))}${st === "PENDIENTE" ? " · pendiente de confirmar" : ""}</small></span><span class="${t.kind === "INGRESO" ? "pos" : ""}">${t.kind === "INGRESO" ? "+" : "−"}${M(t.amount)}</span></button>`; }).join("") : `<p class="muted">Nada programado. Añade recibos que se repiten con «+».</p>`}
   </section>`;
@@ -314,7 +316,7 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.02a · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.03a · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -477,6 +479,8 @@ document.addEventListener("click", (e) => {
   if ("account" in el.dataset) return accountSheet(el.dataset.account);
   if (el.dataset.act === "two-accounts") return twoAccountsSheet();
   if (el.dataset.act === "reset") return resetSheet();
+  if (el.dataset.act === "ticket") return ticketSheet();
+  if (el.dataset.act === "go-budgets") { location.hash = "presupuestos"; return; }
   if (el.dataset.act === "save-voice") return saveVoice();
   if (el.dataset.act === "tutorial") return startTutorial();
   if (el.dataset.act === "daily-test") return dailyTest();
@@ -513,13 +517,12 @@ addEventListener("hashchange", () => { tab = location.hash.replace("#", "") || "
 $("#quickForm").addEventListener("submit", (e) => { e.preventDefault(); Voice.unlockVoice(); const v = $("#quickText").value.trim(); if (v) { $("#quickText").value = ""; ask(v); } });
 $("#mic").addEventListener("click", dictate);
 $("#listenBar").addEventListener("click", () => { if (micBusy) { micStarted = 0; dictate(); } });
-$("#chatBtn").addEventListener("click", () => { Voice.unlockVoice(); openChat(); });
 $("#chatClose").addEventListener("click", () => $("#chat").close());
 $("#chatForm").addEventListener("submit", (e) => { e.preventDefault(); Voice.unlockVoice(); const v = $("#chatText").value.trim(); if (v) { $("#chatText").value = ""; ask(v); } });
 $("#chatMic").addEventListener("click", async () => { Voice.unlockVoice(); $("#chatMic").classList.add("live");
   try { const t = await Voice.listen((p) => { $("#chatText").value = p; }); $("#chatText").value = ""; if (t) ask(t); } catch (err) { if (err.message) talk(err.message, "neutral"); } finally { $("#chatMic").classList.remove("live"); } });
 addEventListener("pointerdown", () => Voice.unlockVoice(), { once: true });
-$("#add").addEventListener("click", () => editor(null));
+$("#add").addEventListener("click", () => { const v = $("#quickText").value.trim(); if (v) $("#quickForm").requestSubmit(); else editor(null); });
 $("#sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeSheet(); });
 // la mirada de Vera sigue al dedo también fuera de su escena
 addEventListener("pointermove", (e) => { if (tab !== "inicio" || !veraReady) return; const r = frame.getBoundingClientRect(); frame.contentWindow.postMessage({ pointer: { x: e.clientX - r.left, y: e.clientY - r.top } }, "*"); }, { passive: true });
@@ -665,6 +668,43 @@ function endTutorial() {
   tut = null; document.body.classList.remove("tut"); $("#tutCard")?.remove();
   document.querySelectorAll(".tut-focus").forEach((e) => e.classList.remove("tut-focus"));
   location.hash = "ajustes"; render();
+}
+
+// ——— Lector de tickets ———
+const ICON_TICKET = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>`;
+function ticketSheet() {
+  openSheet(`<h3>Leer un ticket</h3>
+    <p class="muted small">Haz una foto al ticket o elige una de la galería. Vera saca el comercio, la fecha, el total y la categoría, y te lo deja preparado para confirmar.</p>
+    <div class="tk-pick">
+      <label><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Hacer foto<input type="file" accept="image/*" capture="environment" class="tkFile" hidden></label>
+      <label><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 9"/></svg>Elegir de la galería<input type="file" accept="image/*" class="tkFile" hidden></label>
+    </div>
+    <p class="muted small">${db.settings.groqKey ? "Se lee con la IA de visión de Groq (tu clave). La foto no se guarda." : "Sin clave de Groq se lee en el móvil, con menos precisión. Pon tu clave en Ajustes para mejores resultados."}</p>
+    <div class="actions"><button class="btn ghost" type="button" data-close>Cancelar</button></div>`, (root) => {
+    root.querySelectorAll(".tkFile").forEach((inp) => inp.addEventListener("change", () => { const f = inp.files[0]; inp.value = ""; if (f) readTicket(f); }));
+  });
+}
+async function readTicket(file) {
+  let prep; try { prep = await Tickets.prepare(file); } catch (err) { return toast(err.message); }
+  openSheet(`<h3>Leyendo el ticket…</h3><div class="tk-scan"><img class="tk-prev" src="${prep.dataUrl}" alt="Ticket"></div><p class="muted small" id="tkMsg">Un momento.</p>`, () => {});
+  vera((v) => { v.setState("pensando"); v.show("Leyendo el ticket…"); });
+  const cats = db.categories.filter((c) => !c.archived && !c.income).map((c) => [c.id, c.parentId ? `${catName(c.parentId)} › ${c.name}` : c.name]);
+  let r = null, err = null;
+  if (db.settings.groqKey) { try { r = await Tickets.readWithAI({ key: db.settings.groqKey, proxy: db.settings.proxy, dataUrl: prep.dataUrl, cats, today: C.dateOf(C.nowLocal()) }); } catch (e) { err = e; } }
+  if (!r || !r.legible) { try { const o = await Tickets.readWithOCR(prep.canvas, (m) => { const el = $("#tkMsg"); if (el) el.textContent = m; }); if (o.legible) r = o; } catch (e) { err = err || e; } }
+  vera((v) => v.setState("reposo"));
+  if (!r || !r.legible) { closeSheet(); return talk(err ? `No he podido leer el ticket: ${err.message}` : pickL("No consigo leer el total. Prueba con una foto más recta y con más luz.", "Ese ticket no se lee bien. Otra foto, con más luz.", "Ilegible. Como tus finanzas. Repite la foto con luz.", "No se lee nada. ¿Lo has fotografiado dentro del bolsillo?", "Ilegible. Hasta un ticket arrugado tiene más orden que tus cuentas. Otra foto."), "neutral"); }
+  const today = C.dateOf(C.nowLocal()), date = r.date && r.date <= today && r.date >= C.addDays(today, -400) ? r.date : today;
+  const cash = db.accounts.find((a) => a.type === "EFECTIVO" && !a.archived), spend = db.accounts.find((a) => a.liquid && a.type !== "EFECTIVO" && !a.archived);
+  const accountId = (r.pay === "efectivo" ? cash : spend)?.id || db.accounts.find((a) => a.liquid)?.id;
+  const categoryId = r.categoryId || Importer.classify(r.merchant || "", -r.total);
+  const concept = r.merchant ? r.merchant.replace(/\s+/g, " ").toLowerCase().replace(/(^|\s)\S/g, (x) => x.toUpperCase()) : "Compra";
+  closeSheet();
+  drafts = [{ id: uid(), ownerId: ME, kind: "GASTO", amount: r.total, concept, dateTime: `${date}T${r.time || C.nowLocal().slice(11, 16)}`, status: "REALIZADO", accountId,
+    categoryId: db.categories.some((c) => c.id === categoryId) ? categoryId : "otros", notes: r.lines.length ? "Ticket: " + r.lines.map((l) => `${l.concept} ${M(l.amount)}`).join(" · ") : "Leído de un ticket" }];
+  showDrafts();
+  const dup = C.duplicateSuspects(drafts[0], S.live)[0];
+  talk(`${concept}: ${M(r.total)}${r.pay ? `, pagado con ${r.pay}` : ""}${date !== today ? `, del ${C.fmtDay(date)}` : ""}. ` + (dup ? "Ojo, parece que ya lo tienes apuntado. " : "") + pickL("Revísalo y guarda.", "Revisa y confirma.", "Revisa que lo he leído bien. Spoiler: sí.", "Confírmalo. Que el ticket no te dé vergüenza.", "Confírmalo. El papel no miente; tú sí."), "neutral", "habla", { log: false });
 }
 
 /** Poner a cero: borra movimientos y saldos (para volver a cargar los extractos) o absolutamente todo. */
@@ -818,6 +858,7 @@ function fixCashWithdrawals() {
 
 // ======================= Arranque =======================
 db = load(); materializeAll(); save(); voiceCfg(); render();
+if (db.settings.chatHintSeen) $("#chatHint")?.classList.add("off");
 setInterval(() => { const before = S?.now?.slice(0, 10); compute(); if (S.now.slice(0, 10) !== before) { materializeAll(); save(); render(); } }, 60000);
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("./sw.js", { type: "module", updateViaCache: "none" }).then((r) => { r.update(); notifyCatchup(); }).catch(() => {});
@@ -842,6 +883,7 @@ function renderChatBadge() { $("#chatBtn")?.classList.toggle("has", db.chat.leng
 // ======================= Chat =======================
 const pending = new Map(); // acciones preparadas por la IA a la espera de confirmación
 function openChat() {
+  if (!db.settings.chatHintSeen) { db.settings.chatHintSeen = true; save(); $("#chatHint")?.classList.add("off"); }
   const d = $("#chat"); if (!d.open) d.showModal(); renderChat(); setTimeout(() => $("#chatText")?.focus(), 50);
 }
 function renderChat() {
@@ -918,6 +960,7 @@ async function aiAsk(text) {
 
 function runQuery(name, a) {
   if (name === "ir_a") { location.hash = a.pantalla; return "Pantalla abierta."; }
+  if (name === "leer_ticket") { setTimeout(ticketSheet, 300); return "Lector de tickets abierto: el usuario hará la foto o la elegirá de la galería."; }
   if (name === "listar_recurrentes_y_objetivos") return {
     recurrentes: db.recurrences.filter((r) => r.active !== false).map((r) => ({ id: r.id, concepto: r.template.concept, tipo: r.template.kind, importe: M(r.template.amount), frecuencia: r.frequency, desde: r.start, veces: r.count ?? null })),
     objetivos: db.goals.filter((g) => g.active !== false).map((g) => ({ id: g.id, nombre: g.name, objetivo: M(g.target), mensual: M(g.monthlyContribution), ahorrado: M(db.contributions.filter((c) => c.goalId === g.id).reduce((x, c) => x + c.amount, 0)) })) };
@@ -1023,6 +1066,7 @@ function applyAction(tool, a) {
     save(); configVera(); if (a.modo_demostracion != null && a.modo_demostracion !== demo) { demo = a.modo_demostracion; localStorage.setItem("cc.mode", demo ? "demo" : "real"); db = load(); materializeAll(); }
     return done(() => st.sarcasm >= 4 && a.sarcasmo != null ? "Modo cruel activado. Tú lo has pedido." : "Ajustes cambiados."); }
   if (tool === "importar_extracto") { $("#bankPick").click(); return { comment: "Elige el archivo del extracto." }; }
+  if (tool === "leer_ticket") { ticketSheet(); return { comment: "Lector de tickets abierto." }; }
   if (tool === "exportar_datos") { if (a.formato === "csv") download(`movimientos-${C.dateOf(C.nowLocal())}.csv`, csv(), "text/csv"); else download(`cuentas-claras-${C.dateOf(C.nowLocal())}.json`, JSON.stringify(db, null, 2), "application/json"); return { comment: "Descarga preparada." }; }
   if (tool === "deshacer") { undo(); return { comment: "" }; }
   if (tool === "borrar_todo") { const keep = { ...db.settings }; db = blank(); db.settings = keep; return done("Todo borrado. Empezamos de cero. Si ha sido un error, di «deshaz»."); }
@@ -1172,6 +1216,7 @@ function localAsk(text, quiet = false) {
   }
   if ((m = n.match(/colchon\s+(?:de |a |en )?(\d+(?:[.,]\d{1,2})?)/))) return void propose("ajustar_planificacion", { colchon: C.parseMoney(m[1]) / 100 });
   if ((m = n.match(/ahorr(?:o|ar)\s+(?:mensual\s+)?(?:de |a |en )?(\d+(?:[.,]\d{1,2})?)\s*(?:euros?)?\s*(?:al mes)?/)) && !/gaste|pague/.test(n)) return void propose("ajustar_planificacion", { ahorro_mensual: C.parseMoney(m[1]) / 100 });
+  if (/\b(ticket|tique)s?\b/.test(n)) return ticketSheet();
   if (/por que|de donde sale|explica/.test(n)) return talk(Lines.explain(), Lines.mood());
   if (/(cuanto|que) .*(puedo gastar|me queda|tengo|disponible)|disponible/.test(n)) return talk(Lines.hello(), Lines.mood());
   if (/(ve|ir|abre|llevame)\s+(a\s+)?(los\s+)?(movimientos|presupuestos|cuentas|ajustes|inicio)/.test(n)) { location.hash = n.match(/(movimientos|presupuestos|cuentas|ajustes|inicio)/)[1]; return talk("Ahí lo tienes.", "neutral"); }

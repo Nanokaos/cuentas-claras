@@ -63,6 +63,7 @@ export const TOOLS = [
   fn("buscar_movimientos", "Consulta movimientos por texto, categoría o fechas. Devuelve hasta 40.", {
     texto: { type: "string" }, categoria_id: { type: "string" }, desde: { type: "string" }, hasta: { type: "string" }, tipo: { type: "string" },
   }, []),
+  fn("leer_ticket", "Abre el lector de tickets (foto con la cámara o de la galería).", {}, []),
   fn("ir_a", "Abre una pantalla de la app.", { pantalla: { type: "string", enum: ["inicio", "movimientos", "presupuestos", "cuentas", "ajustes"] } }, ["pantalla"]),
   fn("listar_recurrentes_y_objetivos", "Devuelve los recurrentes activos y los objetivos con su progreso.", {}, []),
   fn("resumen_por_categoria", "Gasto por categoría entre dos fechas (por defecto, este mes).", { desde: { type: "string" }, hasta: { type: "string" } }, []),
@@ -81,6 +82,7 @@ const GROUPS = [
   [/objetivo|meta|ahorrar para|vacaciones|aporta/, ["crear_objetivo", "aportar_objetivo", "eliminar_objetivo", "listar_recurrentes_y_objetivos"]],
   [/sarcasm|cruel|amable|voz|calla|habla|comentario|movimiento reducido|bateria|batería|demostraci|ajuste/, ["cambiar_ajustes"]],
   [/import|extracto|pdf|excel|csv/, ["importar_extracto"]],
+  [/ticket|tique|recibo de compra|factura|foto/, ["leer_ticket"]],
   [/export|descarga|copia|csv|backup/, ["exportar_datos"]],
   [/borra(r)? todo|empezar de cero|borra mis datos|resetea/, ["borrar_todo"]],
   [/pagad|he pagado|confirma|ya cobr/, ["confirmar_previsto"]],
@@ -92,7 +94,7 @@ export function toolsFor(text) {
 }
 export const approxTokens = (obj) => Math.ceil(JSON.stringify(obj).length / 3.2);
 
-export const READ_ONLY = new Set(["buscar_movimientos", "ir_a", "listar_recurrentes_y_objetivos", "resumen_por_categoria"]);
+export const READ_ONLY = new Set(["leer_ticket", "buscar_movimientos", "ir_a", "listar_recurrentes_y_objetivos", "resumen_por_categoria"]);
 
 const PERSONA = [
   "Neutra y profesional, sin bromas.",
