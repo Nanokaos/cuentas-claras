@@ -162,7 +162,7 @@ $("#sheet").addEventListener("close", () => { if (reopenChat) { reopenChat = fal
 // ======================= Pantallas =======================
 function render() {
   compute();
-  document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
+  document.querySelectorAll(".tabs a, .qgear").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
   $("#veraWrap").hidden = tab !== "inicio" && !tut;
   vera((v) => v.goTo?.(STATIONS[tab] ?? STATIONS.inicio, tab === "inicio" ? 12 : 30));
   $("#quick").hidden = tab !== "inicio";
@@ -189,7 +189,7 @@ function home() {
   ${tasksCard()}
   ${r.warnings.length ? `<section class="card warn">${r.warnings.map((w) => `<p>${esc(w.message)}</p>`).join("")}</section>` : ""}
   ${catCard(r)}
-  <div class="homeacts"><button class="ticketbtn" data-act="ticket">${ICON_TICKET}Leer tickets</button><button class="ticketbtn ghost" data-act="go-budgets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/></svg>Presupuestos</button></div>
+  <div class="homeacts"><button class="ticketbtn" data-act="ticket">${ICON_TICKET}Leer tickets</button></div>
   <section class="card"><h3>Próximos recibos e ingresos</h3>
     ${upcoming.length ? upcoming.map((t) => { const st = C.effectiveStatus(t, S.now); return `<button class="row" data-edit="${t.id}"><span><b>${esc(t.concept || "Sin concepto")}</b><small class="${st === "PENDIENTE" ? "w" : ""}">${C.fmtDayLong(C.dateOf(t.dateTime))}${st === "PENDIENTE" ? " · pendiente de confirmar" : ""}</small></span><span class="${t.kind === "INGRESO" ? "pos" : ""}">${t.kind === "INGRESO" ? "+" : "−"}${M(t.amount)}</span></button>`; }).join("") : `<p class="muted">Nada programado. Añade recibos que se repiten con «+».</p>`}
   </section>`;
@@ -316,7 +316,7 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.03a · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.03b · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================

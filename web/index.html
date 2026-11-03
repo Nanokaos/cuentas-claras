@@ -219,6 +219,9 @@ body.conv #veraWrap::after { box-shadow: inset 0 0 0 2px rgba(61,220,151,.75), i
 .tk-lines div { display: flex; justify-content: space-between; gap: 10px; }
 .homeacts { display: flex; gap: 10px; flex-wrap: wrap; }
 .ticketbtn.ghost { background: var(--raise); border-color: var(--line); color: var(--text); font-weight: 500; }
+#quick { align-items: center; }
+.qgear { flex: none; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: var(--muted); background: var(--panel); border: 1px solid var(--line); }
+.qgear svg { width: 22px; height: 22px; } .qgear.on { color: var(--accent); border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -228,14 +231,15 @@ body.conv #veraWrap::after { box-shadow: inset 0 0 0 2px rgba(61,220,151,.75), i
 <div id="quick">
   <form id="quickForm"><input id="quickText" placeholder="23 € en el súper con tarjeta" autocomplete="off" enterkeyhint="send" aria-label="Escribe un gasto o ingreso">
     <button type="button" class="qadd" id="add" aria-label="Añadir movimiento">+</button></form>
+  <a href="#ajustes" class="qgear" data-tab="ajustes" aria-label="Ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.6 15H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9.7 4V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z"/></svg></a>
 </div>
 <main id="view"></main>
 <nav class="tabs" aria-label="Secciones">
   <a href="#inicio" data-tab="inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</a>
   <a href="#movimientos" data-tab="movimientos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg>Movimientos</a>
   <span class="micspace" aria-hidden="true"></span>
+  <a href="#presupuestos" data-tab="presupuestos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/></svg>Presupuestos</a>
   <a href="#cuentas" data-tab="cuentas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 15h2"/></svg>Cuentas</a>
-  <a href="#ajustes" data-tab="ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.6 15H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9.7 4V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z"/></svg>Ajustes</a>
 </nav>
 <div class="micslot" id="micSlot"><button class="round" id="mic" aria-label="Hablar con Vera" aria-pressed="false"><svg class="i-mic" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><svg class="i-stop" width="24" height="24" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg></button></div>
 <dialog id="chat" aria-label="Conversación con Vera">

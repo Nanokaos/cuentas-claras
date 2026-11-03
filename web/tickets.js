@@ -2,7 +2,12 @@
 // Con clave de Groq lo lee un modelo de visión (mucho más fiable); sin ella, reconocimiento de texto en el móvil.
 import * as C from "./core.js";
 
-const VISION = "meta-llama/llama-4-scout-17b-16e-instruct";
+// Modelos de visión de Groq, por orden (si uno no existe o rechaza la petición, se prueba el siguiente).
+const VISION = [
+  { model: "qwen/qwen3.8-27b", extra: { reasoning_format: "hidden" } },
+  { model: "qwen/qwen3.8-27b", extra: {} },
+  { model: "meta-llama/llama-4-scout-17b-16e-instruct", extra: {} },
+];
 
 /** Reduce la foto (máx. 1400 px, JPEG) para enviarla rápido y dentro de los límites. */
 export async function prepare(file) {
@@ -20,14 +25,22 @@ export async function readWithAI({ key, proxy, dataUrl, cats, today }) {
   const prompt = `Lee este ticket de compra español. Devuelve SOLO un JSON con:
 {"comercio": string, "fecha": "AAAA-MM-DD" o null, "hora": "HH:MM" o null, "total": número en euros (el TOTAL pagado, no subtotales ni IVA), "pago": "tarjeta" | "efectivo" | null, "categoria_id": uno de [${cats.map(([id, n]) => `${id} (${n})`).join(", ")}], "lineas": [{"concepto": string, "importe": número}] (máx. 15), "legible": true/false}
 Si no es un ticket o no se lee el total, "legible": false. Hoy es ${today}.`;
-  let r;
-  try {
-    r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
-      body: JSON.stringify({ model: VISION, temperature: 0, max_tokens: 900, response_format: { type: "json_object" },
-        messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: dataUrl } }] }] }) });
-  } catch { throw new Error("No puedo conectar con la IA para leer el ticket."); }
-  if (!r.ok) throw new Error(r.status === 401 ? "La clave de Groq no es válida." : r.status === 413 ? "La foto es demasiado grande." : r.status === 429 ? "He agotado el cupo de Groq por ahora." : `La IA no ha podido leer el ticket (${r.status}).`);
-  const txt = (await r.json()).choices?.[0]?.message?.content || "{}";
+  let r = null, last = 0;
+  for (const v of VISION) {
+    try {
+      r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+        body: JSON.stringify({ model: v.model, ...v.extra, temperature: 0, max_tokens: 1200, response_format: { type: "json_object" },
+          messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: dataUrl } }] }] }) });
+    } catch { throw new Error("No puedo conectar con la IA para leer el ticket."); }
+    if (r.ok) break;
+    last = r.status;
+    if (r.status === 401) throw new Error("La clave de Groq no es válida.");
+    if (r.status === 429) throw new Error("He agotado el cupo de Groq por ahora.");
+    if (![400, 404, 422].includes(r.status)) break;
+  }
+  if (!r.ok) throw new Error(r.status === 413 ? "La foto es demasiado grande." : `La IA no ha podido leer el ticket (${last || r.status}).`);
+  let txt = (await r.json()).choices?.[0]?.message?.content || "{}";
+  txt = txt.replace(/<think>[\s\S]*?<\/think>/g, "");
   const j = JSON.parse(txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1) || "{}");
   return normalize(j, cats);
 }
