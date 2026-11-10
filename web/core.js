@@ -313,3 +313,50 @@ export function parseEntry(text, now) {
     })),
   };
 }
+
+// ---------------- Presupuestos automáticos ----------------
+/**
+ * Estima un límite mensual por categoría principal de gasto con la media de los últimos meses completos
+ * (hasta `months`). No cuenta los recibos recurrentes (ya se reservan aparte) ni los movimientos previstos.
+ * Si aún no hay ningún mes completo, extrapola lo que haya a 30 días. Devuelve céntimos redondeados a euros enteros.
+ */
+export function estimateBudgets({ categories, transactions, now, userId, months = 3 }) {
+  const byId = Object.fromEntries(transactions.map((t) => [t.id, t]));
+  const top = (id) => { let c = categories.find((x) => x.id === id); while (c?.parentId) c = categories.find((x) => x.id === c.parentId); return c; };
+  const today = dateOf(now), curMonth = today.slice(0, 7);
+  const spend = transactions.filter((t) => !t.deleted && t.status === "REALIZADO" && !t.recurrenceId && (t.kind === "GASTO" || t.kind === "DEVOLUCION"));
+  const monthsWithData = [...new Set(spend.map((t) => dateOf(t.dateTime).slice(0, 7)))].filter((m) => m < curMonth).sort().slice(-months);
+  let factor, inRange;
+  if (monthsWithData.length) { factor = 1 / monthsWithData.length; const set = new Set(monthsWithData); inRange = (d) => set.has(d.slice(0, 7)); }
+  else {
+    const first = spend.map((t) => dateOf(t.dateTime)).sort()[0]; if (!first) return [];
+    const days = Math.max(7, daysBetween(first, today) + 1); factor = 30 / days; inRange = (d) => d >= first && d <= today;
+  }
+  const sums = {};
+  for (const t of spend) {
+    const d = dateOf(t.dateTime); if (!inRange(d)) continue;
+    const c = top(categoryOf(t, byId)); if (!c || c.income || c.archived) continue;
+    sums[c.id] = (sums[c.id] || 0) + spendingShare(t, userId, byId);
+  }
+  return Object.entries(sums).map(([categoryId, v]) => ({ categoryId, monthly: Math.max(0, Math.round((v * factor) / 100) * 100) }))
+    .filter((x) => x.monthly > 0).sort((a, b) => b.monthly - a.monthly);
+}
+
+/**
+ * Reparto con total fijo: pone `value` en la posición `i` y quita (o añade) la diferencia al resto,
+ * en proporción a lo que tiene cada uno. Las posiciones de `locked` no se tocan. Todo en céntimos, a euros enteros.
+ */
+export function rebalance(values, i, value, total, locked = new Set()) {
+  const free = values.map((_, k) => k).filter((k) => k !== i && !locked.has(k));
+  const fixed = values.reduce((a, v, k) => a + (k !== i && locked.has(k) ? v : 0), 0);
+  const room = Math.max(0, total - fixed);
+  const out = [...values]; out[i] = Math.max(0, Math.min(room, Math.round(value / 100) * 100));
+  if (!free.length) { out[i] = Math.min(out[i], room); return out; }
+  const target = room - out[i], cur = free.reduce((a, k) => a + values[k], 0);
+  free.forEach((k) => { out[k] = Math.round((cur > 0 ? values[k] * target / cur : target / free.length) / 100) * 100; });
+  // el redondeo deja unos euros sueltos: van a la mayor de las libres
+  let diff = target - free.reduce((a, k) => a + out[k], 0);
+  const order = [...free].sort((a, b) => out[b] - out[a]);
+  for (const k of order) { if (!diff) break; const d = Math.max(-out[k], diff); out[k] += d; diff -= d; }
+  return out;
+}

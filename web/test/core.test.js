@@ -107,3 +107,19 @@ test("duplicados e intérprete de frases", () => {
   assert.deepEqual([i.kind, i.amount, i.dateTime, i.payment], ["INGRESO", 25000, "2026-11-06T18:30", "TRANSFERENCIA"]);
   const t = C.parseEntry("he gastado 12 en el bar y 30 en la farmacia, todo con tarjeta", NOW).drafts; assert.ok(t.every((d) => d.payment === "TARJETA")); assert.equal(t[1].categoryKey, "salud");
 });
+
+test("estima presupuestos con la media de los meses completos, sin recibos", () => {
+  const cats = [{ id: "comida", name: "Comida" }, { id: "super", name: "Súper", parentId: "comida" }, { id: "ocio", name: "Ocio" }, { id: "ing", name: "Nómina", income: true }];
+  const tx = (id, d, cat, eur, extra = {}) => ({ id, ownerId: "yo", kind: "GASTO", amount: eur * 100, dateTime: d + "T12:00", status: "REALIZADO", accountId: "a", categoryId: cat, ...extra });
+  const t = [tx("1", "2026-09-05", "super", 200), tx("2", "2026-10-05", "super", 300), tx("3", "2026-10-07", "ocio", 61), tx("4", "2026-10-01", "ocio", 50, { recurrenceId: "r" }), tx("5", "2026-11-02", "ocio", 999)];
+  const e = C.estimateBudgets({ categories: cats, transactions: t, now: "2026-11-10T10:00", userId: "yo" });
+  assert.deepEqual(e, [{ categoryId: "comida", monthly: 25000 }, { categoryId: "ocio", monthly: 3100 }]);
+});
+test("al subir una barra, las demás bajan y el total no cambia", () => {
+  const v = C.rebalance([30000, 10000, 10000], 0, 40000, 50000);
+  assert.deepEqual(v, [40000, 5000, 5000]);
+  const w = C.rebalance([20000, 20000, 10000], 1, 25000, 50000, new Set([2]));
+  assert.deepEqual(w, [15000, 25000, 10000]);
+  const x = C.rebalance([10000, 10000, 10000], 2, 13300, 30000);
+  assert.equal(x.reduce((a, b) => a + b, 0), 30000);
+});

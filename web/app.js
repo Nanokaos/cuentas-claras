@@ -255,7 +255,9 @@ function movements() {
 }
 function budgets() {
   const tops = db.categories.filter((c) => !c.parentId && !c.income && !c.archived);
-  return `<h2>Presupuestos</h2><p class="muted">Límite mensual por categoría. Las subcategorías cuentan dentro de su categoría. Toca una para cambiarlo.</p>
+  const tot = tops.reduce((a, c) => a + (c.limit || 0), 0);
+  return `<h2>Presupuestos</h2><p class="muted">Límite mensual por categoría. Las subcategorías cuentan dentro de su categoría.</p>
+  <button class="card bsplit" data-act="budget-split"><span><b>Repartir con barras</b><small>${tot ? `${M(tot)} al mes en total · semana ${M(Math.floor(tot / 4))}` : "Calcula una estimación con tu historial y ajústala"}</small></span><span class="chev">›</span></button>
   ${catCard(S.pay)}
   ${tops.map((c) => `<button class="card row" data-limit="${c.id}"><span>${esc(c.name)}${db.categories.some((x) => x.parentId === c.id && !x.archived) ? `<small>${esc(db.categories.filter((x) => x.parentId === c.id && !x.archived).map((x) => x.name).join(", "))}</small>` : ""}</span><span class="${c.limit ? "" : "muted"}">${c.limit ? M(c.limit) + " al mes" : "Sin límite"}</span></button>`).join("")}
   <button class="btn ghost" data-cat="">Añadir categoría</button>
@@ -314,7 +316,7 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.10b · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.10c · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -477,6 +479,7 @@ document.addEventListener("click", (e) => {
   if ("account" in el.dataset) return accountSheet(el.dataset.account);
   if (el.dataset.act === "two-accounts") return twoAccountsSheet();
   if (el.dataset.act === "reset") return resetSheet();
+  if (el.dataset.act === "budget-split") return budgetSheet();
   if (el.dataset.act === "ticket") return ticketSheet();
   if (el.dataset.act === "go-budgets") { location.hash = "presupuestos"; return; }
   if (el.dataset.act === "save-voice") return saveVoice();
@@ -511,7 +514,7 @@ if (db.chat.length) renderChatBadge(); toast(demo ? "Modo demostración." : "Aho
   if (e.target.classList.contains("bankFile")) { const f = e.target.files[0], acc = e.target.dataset.acc; e.target.value = ""; if (f) importStatement(f, acc); return; }
   if (id === "sImport") { const file = e.target.files[0]; if (!file) return; file.text().then((txt) => { const d = JSON.parse(txt); if (!Array.isArray(d.transactions) || !Array.isArray(d.accounts)) throw new Error("formato"); if (!confirm("Esto sustituye los datos actuales de este modo por los de la copia. ¿Continuar?")) return; db = d; save(); render(); toast("Copia restaurada."); }).catch(() => toast("Ese archivo no es una copia válida de Cuentas Claras.")); }
 });
-addEventListener("hashchange", () => { if (location.hash === "#compartido") return void openShared(); tab = location.hash.replace("#", "") || "inicio"; render(); });
+addEventListener("hashchange", () => { if (location.hash === "#compartido") return void openShared(); tab = location.hash.replace("#", "") || "inicio"; render(); if (tab === "presupuestos" && autoBudgets()) render(); });
 /** Archivos que llegan desde «Compartir» en otra app: extractos al importador, fotos al lector de tickets. */
 async function openShared() {
   let files = null; try { files = await Daily.kvGet("shared"); if (files) await Daily.kvSet("shared", null); } catch {}
@@ -714,6 +717,59 @@ async function readTicket(file) {
   showDrafts();
   const dup = C.duplicateSuspects(drafts[0], S.live)[0];
   talk(`${concept}: ${M(r.total)}${r.pay ? `, pagado con ${r.pay}` : ""}${date !== today ? `, del ${C.fmtDay(date)}` : ""}. ` + (dup ? "Ojo, parece que ya lo tienes apuntado. " : "") + pickL("Revísalo y guarda.", "Revisa y confirma.", "Revisa que lo he leído bien. Spoiler: sí.", "Confírmalo. Que el ticket no te dé vergüenza.", "Confírmalo. El papel no miente; tú sí."), "neutral", "habla", { log: false });
+}
+
+// ——— Presupuestos automáticos y reparto con barras ———
+const budgetTops = () => db.categories.filter((c) => !c.parentId && !c.income && !c.archived);
+const estimate = () => C.estimateBudgets({ categories: db.categories, transactions: db.transactions, now: C.nowLocal(), userId: ME });
+/** Si no tienes ningún límite y hay historial, los crea solos con la estimación (una vez). */
+function autoBudgets() {
+  if (demo || db.settings.autoBudgetDone || budgetTops().some((c) => c.limit > 0)) return false;
+  const est = estimate(); if (!est.length) return false;
+  snapshot("crear presupuestos automáticos");
+  est.forEach((e) => { const c = db.categories.find((x) => x.id === e.categoryId); if (c) c.limit = e.monthly; });
+  db.settings.autoBudgetDone = true; save();
+  talk(pickL(`He calculado tus presupuestos con la media de tus últimos meses: ${M(est.reduce((a, e) => a + e.monthly, 0))} en total. Ajústalos con las barras en Presupuestos.`,
+    `Presupuestos creados con tu media de gasto. Total: ${M(est.reduce((a, e) => a + e.monthly, 0))}. Muévelos con las barras si quieres.`,
+    `Te he puesto presupuestos según lo que sueles gastar: ${M(est.reduce((a, e) => a + e.monthly, 0))} al mes. No es una meta, es un retrato. Ajústalo.`,
+    `Presupuestos calculados con tu historial: ${M(est.reduce((a, e) => a + e.monthly, 0))} al mes. Es lo que gastas, no lo que deberías. Baja alguna barra.`,
+    `He medido tu despilfarro medio: ${M(est.reduce((a, e) => a + e.monthly, 0))} al mes. Ese es tu presupuesto ahora. Te reto a bajar alguna barra.`), Lines.mood());
+  return true;
+}
+function budgetSheet() {
+  const est = Object.fromEntries(estimate().map((e) => [e.categoryId, e.monthly]));
+  const tops = budgetTops().sort((a, b) => ((b.limit || est[b.id] || 0) - (a.limit || est[a.id] || 0)));
+  // La primera vez parte de la estimación; después, de lo que hayas guardado.
+  const fromLimits = tops.some((c) => c.limit > 0) && (db.settings.autoBudgetDone || !Object.keys(est).length);
+  let vals = tops.map((c) => (fromLimits ? c.limit || 0 : est[c.id] || 0));
+  let total = vals.reduce((a, b) => a + b, 0) || 50000;
+  if (!vals.some(Boolean)) vals = tops.map(() => Math.round(total / tops.length / 100) * 100);
+  const locked = new Set();
+  const row = (c, k) => `<div class="bslide" data-k="${k}"><div class="bs-h"><b>${esc(c.name)}</b><span><output>${M(vals[k])}</output><button type="button" class="lock" data-lock="${k}" aria-label="Bloquear ${esc(c.name)}" title="Bloquear">🔓</button></span></div>
+    <input type="range" min="0" max="${Math.round(total / 100)}" step="1" value="${Math.round(vals[k] / 100)}" aria-label="${esc(c.name)}">
+    <small class="muted">${est[c.id] ? `Media de tus últimos meses: ${M(est[c.id])}` : "Sin gasto en los últimos meses"} · semana ${M(Math.floor(vals[k] / 4))}</small></div>`;
+  openSheet(`<h3>Repartir el presupuesto</h3>
+    <p class="muted small">Fija el total del mes y mueve las barras: lo que subas en una se resta de las demás, en proporción. Usa el candado para que una no se mueva.</p>
+    <form class="form" id="bForm">
+      <label>Total para el mes (€)<input id="bTotal" inputmode="decimal" value="${moneyInput(total)}"></label>
+      <div id="bRows">${tops.map(row).join("")}</div>
+      <div class="actions"><button class="btn">Guardar</button><button class="btn ghost" type="button" id="bEst">Volver a la estimación</button><button class="btn ghost" type="button" data-close>Cancelar</button></div></form>`, (root) => {
+    const paint = () => root.querySelectorAll(".bslide").forEach((el) => { const k = +el.dataset.k, r = el.querySelector("input");
+      r.max = Math.round(total / 100); r.value = Math.round(vals[k] / 100); el.querySelector("output").textContent = M(vals[k]);
+      el.querySelector("small").textContent = `${est[tops[k].id] ? `Media de tus últimos meses: ${M(est[tops[k].id])}` : "Sin gasto en los últimos meses"} · semana ${M(Math.floor(vals[k] / 4))}`;
+      el.querySelector(".lock").textContent = locked.has(k) ? "🔒" : "🔓"; el.classList.toggle("locked", locked.has(k)); r.disabled = locked.has(k); });
+    root.querySelectorAll(".bslide input").forEach((r) => r.addEventListener("input", () => { const k = +r.closest(".bslide").dataset.k; vals = C.rebalance(vals, k, +r.value * 100, total, locked); paint(); }));
+    root.querySelectorAll("[data-lock]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); const k = +b.dataset.lock; locked.has(k) ? locked.delete(k) : locked.add(k); paint(); }));
+    $("#bTotal", root).addEventListener("change", (e) => { const t = C.parseMoney(e.target.value); if (!(t > 0)) return paint();
+      const fixed = vals.reduce((a, v, k) => a + (locked.has(k) ? v : 0), 0), nt = Math.max(fixed, Math.round(t / 100) * 100), cur = total - fixed;
+      vals = vals.map((v, k) => (locked.has(k) ? v : Math.round((cur > 0 ? v * (nt - fixed) / cur : (nt - fixed) / Math.max(1, tops.length - locked.size)) / 100) * 100));
+      const diff = nt - vals.reduce((a, b) => a + b, 0); const big = vals.map((v, k) => [v, k]).filter(([, k]) => !locked.has(k)).sort((a, b) => b[0] - a[0])[0]; if (big) vals[big[1]] += diff;
+      total = nt; e.target.value = moneyInput(total); paint(); });
+    $("#bEst", root).addEventListener("click", () => { vals = tops.map((c) => est[c.id] || 0); total = vals.reduce((a, b) => a + b, 0) || total; locked.clear(); $("#bTotal", root).value = moneyInput(total); paint(); });
+    $("#bForm", root).addEventListener("submit", (e) => { e.preventDefault(); snapshot("repartir presupuestos");
+      tops.forEach((c, k) => { c.limit = vals[k] > 0 ? vals[k] : 0; }); db.settings.autoBudgetDone = true; save(); closeSheet(); render();
+      talk(pickL(`Presupuestos guardados: ${M(total)} al mes.`, `Hecho. ${M(total)} repartidos.`, `${M(total)} al mes, repartidos a tu gusto. Veremos si los respetas.`, `${M(total)} repartidos. Ahora solo falta cumplirlo, que es la parte que se te da mal.`, `${M(total)} repartidos con barritas. Lo fácil ya está. Lo difícil eres tú.`), Lines.mood()); });
+  });
 }
 
 /** Poner a cero: borra movimientos y saldos (para volver a cargar los extractos) o absolutamente todo. */
@@ -1170,6 +1226,7 @@ async function importStatement(file, forcedAcc = null) {
         if (f.lims?.checked) p.limits.forEach((l) => { const c = db.categories.find((x) => x.id === l.categoryId); if (c && !c.limit) c.limit = l.monthly; });
         if (f.bal?.checked && p.opening != null) target.opening = p.opening;
         save(); closeSheet(); render(); compute();
+        setTimeout(autoBudgets, 4000);
         const nb = pendingBizums().length;
         talk(importComment(p, target) + (nb ? ` Hay ${nb} bizums sin nombre: te los he dejado en tareas, en Inicio.` : ""), Lines.mood());
       });
