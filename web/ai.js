@@ -26,8 +26,8 @@ export const TOOLS = [
     nombre: { type: "string" }, padre_id: { type: "string" }, ingreso: { type: "boolean" }, limite_mensual: { type: "number" },
   }, ["nombre"]),
   fn("renombrar_categoria", "Cambia el nombre de una categoría.", { categoria_id: { type: "string" }, nombre: { type: "string" } }, ["categoria_id", "nombre"]),
-  fn("ajustar_planificacion", "Cambia la fecha del próximo cobro, el colchón o el ahorro mensual.", {
-    proximo_cobro: { type: "string", description: "AAAA-MM-DD" }, colchon: { type: "number" }, ahorro_mensual: { type: "number" },
+  fn("ajustar_planificacion", "Cambia la fecha del próximo cobro.", {
+    proximo_cobro: { type: "string", description: "AAAA-MM-DD" },
   }, []),
   fn("crear_cuenta", "Crea una cuenta (corriente, ahorro, efectivo, tarjeta o inversión).", {
     nombre: { type: "string" }, tipo: { type: "string", enum: ["CORRIENTE", "AHORRO", "EFECTIVO", "TARJETA", "INVERSION"] }, saldo_inicial: { type: "number" },
@@ -132,10 +132,10 @@ export function buildContext({ S, db, C, M }) {
     ahora: S.now.replace("T", " "),
     disponible: { hoy: M(r.today), esta_semana: M(Math.max(0, r.thisWeek)), hasta: r.horizon.provisional ? "fin de mes (provisional, falta fecha de cobro)" : r.horizon.endDate, disponible_periodo: M(r.available), dias: r.horizon.days, al_dia: M(r.dailyRate), deficit: r.deficit ? M(r.deficit) : null, este_mes: M(S.month.available) },
     saldos: { total: M(r.totalBalance), liquido: M(r.liquidBalance) },
-    reservado: { recibos: M(r.reserved.obligations), ahorro: M(r.reserved.savings), objetivos: M(r.reserved.goals), colchon: M(r.reserved.buffer), total: M(r.reserved.total) },
+    reservado: { recibos: M(r.reserved.obligations), objetivos: M(r.reserved.goals), total: M(r.reserved.total) }, ahorro_en_cuentas_de_ahorro: M(db.accounts.filter((a) => !a.archived && !a.liquid).reduce((t, a) => t + (S.bal[a.id] ?? 0), 0)),
     ingresos_previstos_no_contados: r.expectedIncome ? M(r.expectedIncome) + (r.expectedIncomeIsEstimate ? " (estimados)" : "") : null,
     avisos: r.warnings.map((w) => w.message),
-    planificacion: { proximo_cobro: db.settings.nextPayday, colchon: M(db.settings.buffer), ahorro_mensual: M(db.settings.monthlySavings) },
+    planificacion: { proximo_cobro: db.settings.nextPayday },
     cuentas: db.accounts.filter((a) => !a.archived).map((a) => ({ id: a.id, nombre: a.name, tipo: a.type, saldo: M(S.bal[a.id] ?? 0), para_gastar: a.liquid })),
     categorias: cats.map((c) => [c.id, c.name, c.parentId ?? "", c.income ? "ingreso" : "", c.limit ? M(c.limit) : ""].filter((x, i) => i < 2 || x).join("|")),
     presupuestos_mes: r.categories.map((c) => `${c.categoryId}: ${M(c.spent)} de ${M(c.limit)}, queda ${M(c.remaining)}, ${c.state}`),

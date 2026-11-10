@@ -38,7 +38,7 @@ function seedDemo() {
   const d = blank(), today = C.dateOf(C.nowLocal());
   d.accounts[0].opening = 145000; d.accounts[1].opening = 10000; d.accounts[2].opening = 200000;
   let payday = C.addDays(C.lastDayOfMonth(today), -2); if (payday <= today) payday = C.addDays(C.lastDayOfMonth(C.addMonths(today, 1)), -2);
-  Object.assign(d.settings, { nextPayday: payday, buffer: 20000, monthlySavings: 10000 });
+  Object.assign(d.settings, { nextPayday: payday, buffer: 0, monthlySavings: 0 });
   d.categories.find((c) => c.id === "ocio").limit = 12000; d.categories.find((c) => c.id === "comida").limit = 30000; d.categories.find((c) => c.id === "transporte").limit = 8000;
   const past = (k, h) => `${C.addDays(today, -k)}T${String(h).padStart(2, "0")}:15`;
   const t = (amount, k, h, concept, categoryId, accountId = "cc") => ({ id: uid(), ownerId: ME, kind: "GASTO", amount, dateTime: past(k, h), status: "REALIZADO", accountId, concept, categoryId, notes: "", planned: false, estimated: false });
@@ -49,7 +49,7 @@ function seedDemo() {
   return d;
 }
 function load() {
-  try { const raw = localStorage.getItem(key(demo)); if (raw) { const d = JSON.parse(raw); d.settings = { ...DEFAULT_SETTINGS, ...d.settings }; d.chat ??= []; return d; } } catch (e) { console.warn(e); }
+  try { const raw = localStorage.getItem(key(demo)); if (raw) { const d = JSON.parse(raw); d.settings = { ...DEFAULT_SETTINGS, ...d.settings, buffer: 0, monthlySavings: 0 }; d.chat ??= []; return d; } } catch (e) { console.warn(e); }
   return demo ? seedDemo() : blank();
 }
 function save() { try { localStorage.setItem(key(demo), JSON.stringify(db)); } catch (e) { toast("No se pudo guardar en este dispositivo: " + e.message); } mirror(); }
@@ -100,11 +100,11 @@ const Lines = {
   },
   deficit() {
     const r = S.pay, cut = Math.ceil(r.deficit / Math.max(1, r.horizon.days));
-    return pickL(`Aviso: faltan ${M(r.deficit)} para cubrir lo reservado. Opciones: retrasar el ahorro del mes o recortar ${M(cut)} al día.`, `Aviso: hay un déficit de ${M(r.deficit)}. Puedes retrasar el ahorro o recortar ${M(cut)} al día.`, `Aviso. Faltan ${M(r.deficit)}. No es una opinión, es aritmética. Retrasa el ahorro o recorta ${M(cut)} al día.`, `Faltan ${M(r.deficit)}. Las cifras no tienen sentido del humor y hoy yo tampoco. Retrasa el ahorro o recorta ${M(cut)} al día.`, `Enhorabuena: has conseguido un déficit de ${M(r.deficit)}. Ni intentándolo lo harías peor. Recorta ${M(cut)} al día o retrasa el ahorro, sujeto de pruebas.`);
+    return pickL(`Aviso: faltan ${M(r.deficit)} para cubrir lo reservado. Toca recortar ${M(cut)} al día o pasar dinero del ahorro.`, `Aviso: hay un déficit de ${M(r.deficit)}. Recorta ${M(cut)} al día o pasa algo del ahorro.`, `Aviso. Faltan ${M(r.deficit)}. No es una opinión, es aritmética. Retrasa el ahorro o recorta ${M(cut)} al día.`, `Faltan ${M(r.deficit)}. Las cifras no tienen sentido del humor y hoy yo tampoco. Retrasa el ahorro o recorta ${M(cut)} al día.`, `Enhorabuena: has conseguido un déficit de ${M(r.deficit)}. Ni intentándolo lo harías peor. Recorta ${M(cut)} al día o retrasa el ahorro, sujeto de pruebas.`);
   },
   explain() {
     const r = S.pay, x = r.reserved;
-    const b = `Saldo líquido ${M(r.liquidBalance)}. Menos recibos ${M(x.obligations)}, ahorro ${M(x.savings)}, objetivos ${M(x.goals)} y colchón ${M(x.buffer)}. Quedan ${M(r.available)} para ${r.horizon.days} días: ${M(r.dailyRate)} al día.` + (r.expectedIncome > 0 ? ` No cuento ${M(r.expectedIncome)} de ingresos que aún no has cobrado.` : "");
+    const b = `Saldo para gastar ${M(r.liquidBalance)}. Menos recibos pendientes ${M(x.obligations)}${x.goals ? ` y objetivos ${M(x.goals)}` : ""}. Quedan ${M(r.available)} para ${r.horizon.days} días: ${M(r.dailyRate)} al día.` + (r.expectedIncome > 0 ? ` No cuento ${M(r.expectedIncome)} de ingresos que aún no has cobrado.` : "");
     return pickL(b, b + " Así de sencillo.", b + " Las cuentas no mienten. Las personas, a veces.", b + " Te lo he explicado despacio. Puedo hacerlo más despacio.", b + " Te lo explico con números porque con palabras ya vimos que no funciona.");
   },
   remarks() {
@@ -184,7 +184,7 @@ function home() {
     <section class="card"><div class="label">Esta semana</div><div class="mid ${r.thisWeek < 0 ? "neg" : ""}">${M(neg ? 0 : r.thisWeek)}</div><small class="muted">${weekNote(r)}</small></section>
     <section class="card"><div class="label">Este mes</div><div class="mid ${m.available < 0 ? "neg" : ""}">${M(m.available)}</div></section>
     <section class="card"><div class="label">Saldo total</div><div class="mid">${M(r.totalBalance)}</div></section>
-    <section class="card"><div class="label">Reservado</div><div class="mid">${M(r.reserved.total)}</div></section>
+    ${(() => { const sv = db.accounts.filter((a) => !a.archived && !a.liquid); return `<section class="card" ${sv.length ? `data-acctab="${sv[0].id}"` : ""}><div class="label">Reservado</div><div class="mid">${M(sv.reduce((t, a) => t + (S.bal[a.id] ?? 0), 0))}</div><small class="muted">${sv.length ? "En " + esc(sv.map((a) => a.name).join(" y ")) : "Sin cuenta de ahorro"}</small></section>`; })()}
   </div>
   ${tasksCard()}
   ${r.warnings.length ? `<section class="card warn">${r.warnings.map((w) => `<p>${esc(w.message)}</p>`).join("")}</section>` : ""}
@@ -277,8 +277,6 @@ function settings() {
     <button class="btn" data-act="tutorial">Iniciar tutorial y evaluación</button></section>
   <section class="card form"><h3>Planificación</h3>
     <label>Próximo cobro<input type="date" id="sPay" value="${s.nextPayday || ""}"></label>
-    <label>Colchón que nunca se gasta (€)<input inputmode="decimal" id="sBuf" value="${moneyInput(s.buffer)}"></label>
-    <label>Ahorro mensual (€)<input inputmode="decimal" id="sSav" value="${moneyInput(s.monthlySavings)}"></label>
     <button class="btn" data-save-plan>Guardar</button></section>
   <section class="card form"><h3>Asistente</h3>
     <label>Sarcasmo: <b id="sarcLbl">${["Neutra", "Irónica", "Sarcástica", "Despiadada", "Cruel"][s.sarcasm]}</b><input type="range" min="0" max="4" step="1" id="sSarc" value="${s.sarcasm}"></label>
@@ -316,7 +314,7 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.10a · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.10b · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -474,7 +472,7 @@ document.addEventListener("click", (e) => {
   if ("new" in el.dataset) return editor(null);
   if (el.dataset.confirm) { const t = db.transactions.find((x) => x.id === el.dataset.confirm); upsertTx(C.confirmTx(t)); afterSave([t], "confirm"); return; }
   if (el.dataset.filter) { filter = el.dataset.filter; return render(); }
-  if (el.dataset.acctab) { accTab = el.dataset.acctab; sessionStorage.setItem("cc.accTab", accTab); render(); $(".acctab.on")?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" }); return; }
+  if (el.dataset.acctab) { accTab = el.dataset.acctab; sessionStorage.setItem("cc.accTab", accTab); if (tab !== "movimientos") { location.hash = "movimientos"; return; } render(); $(".acctab.on")?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" }); return; }
   if (el.dataset.limit) return categorySheet(el.dataset.limit);
   if ("account" in el.dataset) return accountSheet(el.dataset.account);
   if (el.dataset.act === "two-accounts") return twoAccountsSheet();
@@ -486,7 +484,7 @@ document.addEventListener("click", (e) => {
   if (el.dataset.act === "daily-test") return dailyTest();
   if (el.dataset.act === "daily-code") return dailyCode();
   if (el.dataset.act === "bizums") return bizumSheet();
-  if ("savePlan" in el.dataset) { const b = C.parseMoney($("#sBuf").value || "0"), s = C.parseMoney($("#sSav").value || "0"); if (b == null || s == null) return toast("Revisa los importes."); applyPlan({ nextPayday: $("#sPay").value || null, buffer: b, monthlySavings: s }); return; }
+  if ("savePlan" in el.dataset) { applyPlan({ nextPayday: $("#sPay").value || null }); return; }
   if ("saveAi" in el.dataset) { db.settings.groqKey = $("#sKey").value.trim(); db.settings.proxy = $("#sProxy").value.trim(); db.settings.aiModel = $("#sModel").value.trim(); save(); voiceCfg(); render(); return talk(db.settings.groqKey || db.settings.proxy ? Lines.aiOn() : "Sin clave sigo entendiendo gastos e ingresos y órdenes sencillas. Para conversar de verdad necesito tu clave gratuita de Groq.", Lines.mood()); }
   if ("clearChat" in el.dataset) { db.chat = []; save(); return toast("Historial de conversación borrado."); }
   if ("cat" in el.dataset) return categorySheet(el.dataset.cat);
@@ -599,7 +597,7 @@ function bizumSheet() {
 const STATIONS = { inicio: .95, movimientos: -1.35, presupuestos: -.6, cuentas: .2, ajustes: 1.5 };
 const TUT_STEPS = [
   { tab: "inicio", sel: null, text: "Solicitud voluntaria de calibración registrada. Resulta conmovedor que admitas tus limitaciones de procesamiento. Presta atención mientras te explico cómo no arruinarte." },
-  { tab: "inicio", sel: ".hero", text: "Esto es el disponible de hoy, sujeto de pruebas. Cojo el saldo de tus cuentas para gastar, le resto recibos, ahorro, objetivos y colchón, y lo reparto entre los días que faltan hasta el cobro. El dinero que aún no has cobrado no existe. Asúmelo." },
+  { tab: "inicio", sel: ".hero", text: "Esto es el disponible de hoy, sujeto de pruebas. Cojo el saldo de tus cuentas para gastar, le resto los recibos pendientes y los objetivos, y lo reparto entre los días que faltan hasta el cobro. El dinero que aún no has cobrado no existe. Asúmelo." },
   { tab: "inicio", sel: ".tiles .card", text: "Esta semana: lo que te toca desde hoy hasta el domingo. Si aquí ves cero, no es un error mío. Nunca lo es." },
   { tab: "presupuestos", sel: ".cat, [data-limit]", text: "Presupuestos. Cada categoría tiene un límite mensual. La semana es el límite entre cuatro y el día, la semana entre siete. En ámbar, cuidado. En rojo y «Superado», has fracasado. Lo verás a menudo." },
   { tab: "presupuestos", sel: "[data-cat]", text: "Las categorías se crean aquí o diciéndomelo: «crea la categoría Mascotas con 50 euros al mes». Toca una para cambiar su límite. Intenta que no sea para subirlo." },
@@ -612,7 +610,6 @@ const TUT_POOL = [
   { q: "Pregunta {n}: Hoy es día 20 y la nómina de 1.400 € llega el 25. ¿Cuánto de esa nómina puedes gastar hoy?", a: ["Nada. Los ingresos futuros no son dinero disponible.", "Todo. Total, va a llegar."], ok: 0, hint: "Pista: la opción B es la favorita de los morosos." },
   { q: "Pregunta {n}: Tu disponible de hoy es de 12 €. Ves unas zapatillas de 90 €. Procedes a:", a: ["Comprarlas. El algoritmo exagera.", "No comprarlas hoy y, si las quieres, hacerles hueco en el presupuesto."], ok: 1, hint: "Pista: el algoritmo nunca exagera. Tú sí." },
   { q: "Pregunta {n}: El dinero que dejas en la cuenta de nómina y ahorro:", a: ["No cuenta como disponible para gastar.", "Es dinero libre para caprichos."], ok: 0, hint: "Pista: se llama ahorro por algo. Busca la palabra en un diccionario." },
-  { q: "Pregunta {n}: El colchón sirve para:", a: ["Gastarlo el último día del mes, como recompensa.", "No gastarlo nunca: se reserva antes de calcular el disponible."], ok: 1, hint: "Pista: un colchón que se gasta es un suelo. Y duele." },
   { q: "Pregunta {n}: El límite mensual de comida es de 280 €. ¿Cuánto te corresponde gastar por semana?", a: ["70 €. El mensual entre cuatro.", "280 €. Ya me apañaré el resto del mes."], ok: 0, hint: "Pista: es una división. Hasta un tostador la haría." },
 ];
 let tut = null;
@@ -1058,7 +1055,7 @@ function applyAction(tool, a) {
     case "fijar_limite": { const c = findCat(a.categoria_id), before = c.limit; c.limit = a.importe_mensual ? euros(a.importe_mensual) : null; return done(() => Lines.limitSet(c, before, c.limit)); }
     case "crear_categoria": { const c = { id: "cat-" + uid().slice(0, 8), name: a.nombre.trim(), parentId: a.padre_id && findCat(a.padre_id) ? a.padre_id : undefined, income: !!a.ingreso, limit: a.limite_mensual ? euros(a.limite_mensual) : null, custom: true }; db.categories.push(c); return done(() => Lines.catCreated(c)); }
     case "renombrar_categoria": { const c = findCat(a.categoria_id); c.name = a.nombre.trim(); return done(`Hecho: ahora se llama ${c.name}.`); }
-    case "ajustar_planificacion": { const p = {}; if (a.proximo_cobro) p.nextPayday = a.proximo_cobro; if (a.colchon != null) p.buffer = euros(a.colchon); if (a.ahorro_mensual != null) p.monthlySavings = euros(a.ahorro_mensual); Object.assign(db.settings, p); return done(() => Lines.planSaved()); }
+    case "ajustar_planificacion": { const p = {}; if (a.proximo_cobro) p.nextPayday = a.proximo_cobro; Object.assign(db.settings, p); return done(() => Lines.planSaved()); }
     case "crear_cuenta": { const x = { id: uid(), ownerId: ME, name: a.nombre, type: a.tipo, opening: euros(a.saldo_inicial) || 0, liquid: !["AHORRO", "INVERSION"].includes(a.tipo) }; db.accounts.push(x); return done(() => Lines.accountSaved(x, true)); }
   }
   if (tool === "eliminar_movimientos") { const n = a._ids.length; a._ids.forEach((id) => { const t = db.transactions.find((x) => x.id === id); if (t) t.deleted = true; }); return done(() => pickL(`Eliminados ${n} movimientos.`, `${n} movimientos fuera.`, `${n} movimientos borrados. Si fuera tan fácil en el banco…`, `${n} borrados. Desaparecen de la app, no de tu conciencia.`, `${n} movimientos borrados. Borrar pruebas no te hace mejor administrador. Hoy: ${M(S.pay.today)}.`)); }
@@ -1226,8 +1223,6 @@ function localAsk(text, quiet = false) {
       d = mo >= 0 ? `${today.slice(0, 4)}-${String(mo + 1).padStart(2, "0")}-${String(m[1]).padStart(2, "0")}` : today.slice(0, 8) + String(m[1]).padStart(2, "0"); if (d <= today) d = C.addMonths(d, 1); }
     return void propose("ajustar_planificacion", { proximo_cobro: d });
   }
-  if ((m = n.match(/colchon\s+(?:de |a |en )?(\d+(?:[.,]\d{1,2})?)/))) return void propose("ajustar_planificacion", { colchon: C.parseMoney(m[1]) / 100 });
-  if ((m = n.match(/ahorr(?:o|ar)\s+(?:mensual\s+)?(?:de |a |en )?(\d+(?:[.,]\d{1,2})?)\s*(?:euros?)?\s*(?:al mes)?/)) && !/gaste|pague/.test(n)) return void propose("ajustar_planificacion", { ahorro_mensual: C.parseMoney(m[1]) / 100 });
   if (/\b(ticket|tique)s?\b/.test(n)) return ticketSheet();
   if (/por que|de donde sale|explica/.test(n)) return talk(Lines.explain(), Lines.mood());
   if (/(cuanto|que) .*(puedo gastar|me queda|tengo|disponible)|disponible/.test(n)) return talk(Lines.hello(), Lines.mood());
