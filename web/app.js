@@ -257,7 +257,7 @@ function budgets() {
   const tops = db.categories.filter((c) => !c.parentId && !c.income && !c.archived);
   const tot = tops.reduce((a, c) => a + (c.limit || 0), 0);
   return `<h2>Presupuestos</h2><p class="muted">Límite mensual por categoría. Las subcategorías cuentan dentro de su categoría.</p>
-  <button class="card bsplit" data-act="budget-split"><span><b>Repartir con barras</b><small>${tot ? `${M(tot)} al mes en total · semana ${M(Math.floor(tot / 4))}` : "Calcula una estimación con tu historial y ajústala"}</small></span><span class="chev">›</span></button>
+  <button class="card bsplit" data-act="budget-split"><span><b>Repartir con barras</b><small>${tot ? `Límites: ${M(tot)} al mes · llevas ${M(Object.values(monthSpentTop()).reduce((a, b) => a + b, 0))} gastados` : "Calcula cuánto puedes gastar en cada cosa"}</small></span><span class="chev">›</span></button>
   ${catCard(S.pay)}
   ${tops.map((c) => `<button class="card row" data-limit="${c.id}"><span>${esc(c.name)}${db.categories.some((x) => x.parentId === c.id && !x.archived) ? `<small>${esc(db.categories.filter((x) => x.parentId === c.id && !x.archived).map((x) => x.name).join(", "))}</small>` : ""}</span><span class="${c.limit ? "" : "muted"}">${c.limit ? M(c.limit) + " al mes" : "Sin límite"}</span></button>`).join("")}
   <button class="btn ghost" data-cat="">Añadir categoría</button>
@@ -316,7 +316,7 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.10c · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.10d · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -736,27 +736,46 @@ function autoBudgets() {
     `He medido tu despilfarro medio: ${M(est.reduce((a, e) => a + e.monthly, 0))} al mes. Ese es tu presupuesto ahora. Te reto a bajar alguna barra.`), Lines.mood());
   return true;
 }
+/** Gastado este mes (natural) por categoría principal. */
+function monthSpentTop() {
+  const from = C.dateOf(S.now).slice(0, 8) + "01", to = C.dateOf(S.now), byId = Object.fromEntries(db.transactions.map((t) => [t.id, t])), out = {};
+  const top = (id) => { let c = db.categories.find((x) => x.id === id); while (c?.parentId) c = db.categories.find((x) => x.id === c.parentId); return c?.id; };
+  for (const t of S.live) { if (C.effectiveStatus(t, S.now) !== "REALIZADO") continue; const d = C.dateOf(t.dateTime); if (d < from || d > to) continue;
+    const v = C.spendingShare(t, ME, byId); if (!v) continue; const k = top(C.categoryOf(t, byId)) || "otros"; out[k] = (out[k] || 0) + v; }
+  return out;
+}
+/** Lo que puedes gastar este mes en total: lo ya gastado + recibos pendientes + lo disponible hasta el cobro. */
+const affordable = (spent) => Math.round((Object.values(spent).reduce((a, b) => a + b, 0) + S.pay.reserved.obligations + Math.max(0, S.pay.available)) / 100) * 100;
 function budgetSheet() {
   const est = Object.fromEntries(estimate().map((e) => [e.categoryId, e.monthly]));
+  const spent = monthSpentTop(), canSpend = affordable(spent), avgTotal = Object.values(est).reduce((a, b) => a + b, 0);
+  /** Reparte un total según tus hábitos (media), sin bajar de lo que ya llevas gastado. */
+  const spread = (tot) => { const w = tops.map((c) => est[c.id] || 0), W = w.reduce((a, b) => a + b, 0) || 1;
+    let v = tops.map((c, k) => Math.max(spent[c.id] || 0, Math.round(tot * w[k] / W / 100) * 100)); const d = tot - v.reduce((a, b) => a + b, 0);
+    if (d) { const k = v.map((x, i) => [x, i]).sort((a, b) => b[0] - a[0])[0][1]; v[k] = Math.max(0, v[k] + d); } return v; };
   const tops = budgetTops().sort((a, b) => ((b.limit || est[b.id] || 0) - (a.limit || est[a.id] || 0)));
   // La primera vez parte de la estimación; después, de lo que hayas guardado.
   const fromLimits = tops.some((c) => c.limit > 0) && (db.settings.autoBudgetDone || !Object.keys(est).length);
-  let vals = tops.map((c) => (fromLimits ? c.limit || 0 : est[c.id] || 0));
-  let total = vals.reduce((a, b) => a + b, 0) || 50000;
+  let total = fromLimits ? tops.reduce((a, c) => a + (c.limit || 0), 0) : (canSpend || avgTotal || 50000);
+  let vals = fromLimits ? tops.map((c) => c.limit || 0) : spread(total);
   if (!vals.some(Boolean)) vals = tops.map(() => Math.round(total / tops.length / 100) * 100);
   const locked = new Set();
   const row = (c, k) => `<div class="bslide" data-k="${k}"><div class="bs-h"><b>${esc(c.name)}</b><span><output>${M(vals[k])}</output><button type="button" class="lock" data-lock="${k}" aria-label="Bloquear ${esc(c.name)}" title="Bloquear">🔓</button></span></div>
     <input type="range" min="0" max="${Math.round(total / 100)}" step="1" value="${Math.round(vals[k] / 100)}" aria-label="${esc(c.name)}">
-    <small class="muted">${est[c.id] ? `Media de tus últimos meses: ${M(est[c.id])}` : "Sin gasto en los últimos meses"} · semana ${M(Math.floor(vals[k] / 4))}</small></div>`;
+    <small class="muted"></small></div>`;
   openSheet(`<h3>Repartir el presupuesto</h3>
-    <p class="muted small">Fija el total del mes y mueve las barras: lo que subas en una se resta de las demás, en proporción. Usa el candado para que una no se mueva.</p>
+    <div class="bsum"><div><small>Este mes puedes gastar</small><b>${M(canSpend)}</b><small>Llevas ${M(Object.values(spent).reduce((a, b) => a + b, 0))} gastados + ${M(S.pay.reserved.obligations)} de recibos pendientes + ${M(Math.max(0, S.pay.available))} disponibles hasta el cobro.</small></div>
+      <div><small>Tu gasto medio</small><b>${M(avgTotal)}</b><small>Media de tus últimos meses.</small></div></div>
+    <p class="muted small">Cada barra es el límite de esa categoría. Lo que subas en una se resta de las demás. El candado deja una fija.</p>
     <form class="form" id="bForm">
       <label>Total para el mes (€)<input id="bTotal" inputmode="decimal" value="${moneyInput(total)}"></label>
+      <div class="actions"><button class="btn ghost" type="button" id="bCan">Lo que puedo gastar (${M(canSpend)})</button><button class="btn ghost" type="button" id="bAvg">Mi media (${M(avgTotal)})</button></div>
       <div id="bRows">${tops.map(row).join("")}</div>
-      <div class="actions"><button class="btn">Guardar</button><button class="btn ghost" type="button" id="bEst">Volver a la estimación</button><button class="btn ghost" type="button" data-close>Cancelar</button></div></form>`, (root) => {
+      <div class="actions"><button class="btn">Guardar</button><button class="btn ghost" type="button" id="bEst">Recalcular</button><button class="btn ghost" type="button" data-close>Cancelar</button></div></form>`, (root) => {
     const paint = () => root.querySelectorAll(".bslide").forEach((el) => { const k = +el.dataset.k, r = el.querySelector("input");
       r.max = Math.round(total / 100); r.value = Math.round(vals[k] / 100); el.querySelector("output").textContent = M(vals[k]);
-      el.querySelector("small").textContent = `${est[tops[k].id] ? `Media de tus últimos meses: ${M(est[tops[k].id])}` : "Sin gasto en los últimos meses"} · semana ${M(Math.floor(vals[k] / 4))}`;
+      const sp = spent[tops[k].id] || 0, sm = el.querySelector("small");
+      sm.innerHTML = `Llevas <b class="${sp > vals[k] ? "neg" : ""}">${M(sp)}</b> este mes · ${sp > vals[k] ? `te pasas ${M(sp - vals[k])}` : `te quedan ${M(vals[k] - sp)}`} · media ${M(est[tops[k].id] || 0)} · semana ${M(Math.floor(vals[k] / 4))}`;
       el.querySelector(".lock").textContent = locked.has(k) ? "🔒" : "🔓"; el.classList.toggle("locked", locked.has(k)); r.disabled = locked.has(k); });
     root.querySelectorAll(".bslide input").forEach((r) => r.addEventListener("input", () => { const k = +r.closest(".bslide").dataset.k; vals = C.rebalance(vals, k, +r.value * 100, total, locked); paint(); }));
     root.querySelectorAll("[data-lock]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); const k = +b.dataset.lock; locked.has(k) ? locked.delete(k) : locked.add(k); paint(); }));
@@ -765,7 +784,11 @@ function budgetSheet() {
       vals = vals.map((v, k) => (locked.has(k) ? v : Math.round((cur > 0 ? v * (nt - fixed) / cur : (nt - fixed) / Math.max(1, tops.length - locked.size)) / 100) * 100));
       const diff = nt - vals.reduce((a, b) => a + b, 0); const big = vals.map((v, k) => [v, k]).filter(([, k]) => !locked.has(k)).sort((a, b) => b[0] - a[0])[0]; if (big) vals[big[1]] += diff;
       total = nt; e.target.value = moneyInput(total); paint(); });
-    $("#bEst", root).addEventListener("click", () => { vals = tops.map((c) => est[c.id] || 0); total = vals.reduce((a, b) => a + b, 0) || total; locked.clear(); $("#bTotal", root).value = moneyInput(total); paint(); });
+    const setTotal = (t) => { total = t; vals = spread(total); locked.clear(); $("#bTotal", root).value = moneyInput(total); paint(); };
+    $("#bEst", root).addEventListener("click", () => setTotal(canSpend || avgTotal));
+    $("#bCan", root).addEventListener("click", () => setTotal(canSpend));
+    $("#bAvg", root).addEventListener("click", () => setTotal(avgTotal));
+    paint();
     $("#bForm", root).addEventListener("submit", (e) => { e.preventDefault(); snapshot("repartir presupuestos");
       tops.forEach((c, k) => { c.limit = vals[k] > 0 ? vals[k] : 0; }); db.settings.autoBudgetDone = true; save(); closeSheet(); render();
       talk(pickL(`Presupuestos guardados: ${M(total)} al mes.`, `Hecho. ${M(total)} repartidos.`, `${M(total)} al mes, repartidos a tu gusto. Veremos si los respetas.`, `${M(total)} repartidos. Ahora solo falta cumplirlo, que es la parte que se te da mal.`, `${M(total)} repartidos con barritas. Lo fácil ya está. Lo difícil eres tú.`), Lines.mood()); });

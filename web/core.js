@@ -317,14 +317,14 @@ export function parseEntry(text, now) {
 // ---------------- Presupuestos automáticos ----------------
 /**
  * Estima un límite mensual por categoría principal de gasto con la media de los últimos meses completos
- * (hasta `months`). No cuenta los recibos recurrentes (ya se reservan aparte) ni los movimientos previstos.
+ * (hasta `months`). Incluye recibos y suscripciones (también cuentan en su categoría); no los movimientos previstos.
  * Si aún no hay ningún mes completo, extrapola lo que haya a 30 días. Devuelve céntimos redondeados a euros enteros.
  */
 export function estimateBudgets({ categories, transactions, now, userId, months = 3 }) {
   const byId = Object.fromEntries(transactions.map((t) => [t.id, t]));
   const top = (id) => { let c = categories.find((x) => x.id === id); while (c?.parentId) c = categories.find((x) => x.id === c.parentId); return c; };
   const today = dateOf(now), curMonth = today.slice(0, 7);
-  const spend = transactions.filter((t) => !t.deleted && t.status === "REALIZADO" && !t.recurrenceId && (t.kind === "GASTO" || t.kind === "DEVOLUCION"));
+  const spend = transactions.filter((t) => !t.deleted && t.status === "REALIZADO" && (t.kind === "GASTO" || t.kind === "DEVOLUCION"));
   const monthsWithData = [...new Set(spend.map((t) => dateOf(t.dateTime).slice(0, 7)))].filter((m) => m < curMonth).sort().slice(-months);
   let factor, inRange;
   if (monthsWithData.length) { factor = 1 / monthsWithData.length; const set = new Set(monthsWithData); inRange = (d) => set.has(d.slice(0, 7)); }

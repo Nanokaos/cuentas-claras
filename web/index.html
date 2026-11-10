@@ -229,6 +229,10 @@ body.conv #veraWrap::after { box-shadow: inset 0 0 0 2px rgba(61,220,151,.75), i
 .bslide input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }
 .bslide.locked { opacity: .6; } .lock { background: none; border: 0; font-size: 16px; cursor: pointer; padding: 2px 4px; }
 #bRows { max-height: 48vh; overflow: auto; }
+.bsum { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+.bsum > div { background: var(--raise); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: grid; gap: 2px; }
+.bsum b { font-size: 20px; } .bsum small { color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+.bslide small b { color: var(--text); } .bslide small b.neg { color: #ff6b8a; }
 </style>
 </head>
 <body>
