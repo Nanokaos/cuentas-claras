@@ -1,11 +1,19 @@
 // Veranza: funciona sin conexión y manda la frase diaria de Vera.
-import { dailyNote } from "./daily.js";
+import { dailyNote, kvSet } from "./daily.js";
 
-const CACHE = "cc-v16";
+const CACHE = "cc-v17";
 const CORE = ["./", "./index.html", "./app.js", "./core.js", "./voice.js", "./ai.js", "./importer.js", "./daily.js", "./converse.js", "./tickets.js", "./vera.html", "./manifest.webmanifest", "./icon-192.png", "./badge.png", "./splash.jpg"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", (e) => {
+  // Compartir un PDF, Excel o foto desde otra app (menú «Compartir» de Android): se guarda y se abre Veranza.
+  if (e.request.method === "POST" && new URL(e.request.url).pathname.endsWith("/compartir")) {
+    e.respondWith((async () => {
+      try { const fd = await e.request.formData(); const files = fd.getAll("file").filter((f) => f && f.size); if (files.length) await kvSet("shared", files); } catch (err) { console.warn(err); }
+      return Response.redirect("./#compartido", 303);
+    })());
+    return;
+  }
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url), own = url.origin === location.origin;
   // Archivos propios: primero la red (siempre la última versión), y si no hay conexión, la copia guardada.

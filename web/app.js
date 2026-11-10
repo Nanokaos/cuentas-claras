@@ -141,7 +141,7 @@ const Lines = {
 
 // ======================= Utilidades de interfaz =======================
 const view = $("#view");
-let tab = location.hash.replace("#", "") || "inicio";
+let tab = (location.hash.replace("#", "") || "inicio").replace("compartido", "inicio");
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 3200); }
 const catName = (id) => { const c = db.categories.find((x) => x.id === id); if (!c) return ""; const p = c.parentId && db.categories.find((x) => x.id === c.parentId); return (p ? p.name + " › " : "") + c.name; };
 const accName = (id) => db.accounts.find((a) => a.id === id)?.name ?? "";
@@ -316,7 +316,7 @@ function settings() {
     <button class="btn ghost" data-undo>Deshacer último cambio</button>
     <button class="btn danger" data-act="reset">Poner todo a cero…</button>
     <p class="muted small">Tus datos se guardan solo en este dispositivo y navegador. Haz copias de vez en cuando hasta que llegue la sincronización.</p></section>
-  <p class="muted small">Veranza · versión 2026.11.03b · coste 0 €.</p>`;
+  <p class="muted small">Veranza · versión 2026.11.10a · coste 0 €.</p>`;
 }
 
 // ======================= Editor de movimientos =======================
@@ -513,7 +513,19 @@ if (db.chat.length) renderChatBadge(); toast(demo ? "Modo demostración." : "Aho
   if (e.target.classList.contains("bankFile")) { const f = e.target.files[0], acc = e.target.dataset.acc; e.target.value = ""; if (f) importStatement(f, acc); return; }
   if (id === "sImport") { const file = e.target.files[0]; if (!file) return; file.text().then((txt) => { const d = JSON.parse(txt); if (!Array.isArray(d.transactions) || !Array.isArray(d.accounts)) throw new Error("formato"); if (!confirm("Esto sustituye los datos actuales de este modo por los de la copia. ¿Continuar?")) return; db = d; save(); render(); toast("Copia restaurada."); }).catch(() => toast("Ese archivo no es una copia válida de Cuentas Claras.")); }
 });
-addEventListener("hashchange", () => { tab = location.hash.replace("#", "") || "inicio"; render(); });
+addEventListener("hashchange", () => { if (location.hash === "#compartido") return void openShared(); tab = location.hash.replace("#", "") || "inicio"; render(); });
+/** Archivos que llegan desde «Compartir» en otra app: extractos al importador, fotos al lector de tickets. */
+async function openShared() {
+  let files = null; try { files = await Daily.kvGet("shared"); if (files) await Daily.kvSet("shared", null); } catch {}
+  history.replaceState(null, "", "#inicio"); tab = "inicio"; render();
+  const f = files?.[0]; if (!f) return;
+  if (demo) toast("Ojo: estás en modo demostración. Cámbialo en Ajustes para usar tus datos.");
+  const name = (f.name || "").toLowerCase();
+  if ((f.type || "").startsWith("image/") || /\.(jpe?g|png|webp|heic)$/.test(name)) return setTimeout(() => readTicket(f), 400);
+  if (/pdf|csv|sheet|excel|spreadsheet/.test(f.type || "") || /\.(pdf|csv|xlsx?|ods)$/.test(name)) return setTimeout(() => importStatement(f, sessionStorage.getItem("cc.accTab") !== "todas" ? sessionStorage.getItem("cc.accTab") : null), 400);
+  talk("No sé qué hacer con ese archivo. Compárteme un extracto (PDF, Excel o CSV) o la foto de un ticket.", "neutral");
+}
+if (location.hash === "#compartido") setTimeout(openShared, 600);
 $("#quickForm").addEventListener("submit", (e) => { e.preventDefault(); Voice.unlockVoice(); const v = $("#quickText").value.trim(); if (v) { $("#quickText").value = ""; ask(v); } });
 $("#mic").addEventListener("click", dictate);
 $("#listenBar").addEventListener("click", () => { if (micBusy) { micStarted = 0; dictate(); } });

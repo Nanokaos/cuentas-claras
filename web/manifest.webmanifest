@@ -11,8 +11,55 @@
   "background_color": "#08050e",
   "theme_color": "#08050e",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "share_target": {
+    "action": "./compartir",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [
+        {
+          "name": "file",
+          "accept": [
+            "application/pdf",
+            ".pdf",
+            "image/*",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp",
+            ".heic",
+            "text/csv",
+            ".csv",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xlsx",
+            "application/vnd.ms-excel",
+            ".xls",
+            "application/vnd.oasis.opendocument.spreadsheet",
+            ".ods"
+          ]
+        }
+      ]
+    }
+  }
 }
